@@ -1,1 +1,4 @@
 test/*
+*.mif
+golden_trace.txt
+sim
