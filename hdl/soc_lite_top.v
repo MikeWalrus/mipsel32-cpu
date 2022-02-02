@@ -212,4 +212,3 @@ module soc_lite_top #(parameter SIMULATION=1'b0)
             );
 
 endmodule
-

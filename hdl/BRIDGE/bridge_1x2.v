@@ -101,11 +101,8 @@ module bridge_1x2(
         end
     end
 
-    // TODO: change this to accomodate for the sync ram
-    //assign cpu_data_rdata = {32{sel_sram_r}} & data_sram_rdata
-    //                      | {32{sel_conf_r}} & conf_rdata;
-    assign cpu_data_rdata = {32{sel_sram}} & data_sram_rdata
-           | {32{sel_conf}} & conf_rdata;
+    assign cpu_data_rdata = {32{sel_sram_r}} & data_sram_rdata
+                          | {32{sel_conf_r}} & conf_rdata;
 
 endmodule
 

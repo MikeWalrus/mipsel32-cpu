@@ -8,23 +8,24 @@ module ram #
         input [$clog2(depth)-1:0] addr,
         input clk,
         input [width - 1:0] din,
-        output [width - 1:0] dout,
+        output reg [width - 1:0] dout,
         input en,
         input [width/8 - 1:0] we
     );
 
     reg [width - 1:0] ram_[depth - 1:0];
-    assign dout = ram_[addr];
 
-    generate
-        genvar i;
-        for (i = 0; i < num_bytes; i = i + 1) begin
-            always @(posedge clk) begin
-                if (we[i])
-                    ram_[addr][i*8+7:i*8] <= din[i*8+7:i*8];
-            end
+    genvar i;
+    for (i = 0; i < num_bytes; i = i + 1) begin
+        always @(posedge clk) begin
+            if (we[i])
+                ram_[addr][i*8+7:i*8] <= din[i*8+7:i*8];
         end
-    endgenerate
+    end
+    always @(posedge clk) begin
+        if (en)
+            dout <= ram_[addr];
+    end
 endmodule
 
 module inst_ram #

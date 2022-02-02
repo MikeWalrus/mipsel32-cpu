@@ -2,3 +2,6 @@ test/*
 *.mif
 golden_trace.txt
 sim
+*.gtkw
+*.vcd
+*.lx2

@@ -1,18 +1,13 @@
 `include "alu.vh"
 module control(
+        input is_IF_ID_valid,
         input [5:0] opcode,
         input [5:0] func,
 
         input is_eq,
-        input is_delay_slot,
-        output is_delay_slot_next,
-        input jar,
-        output jar_next,
-        input jr,
-        output jr_next,
 
         output next_pc_is_next,
-        output next_pc_is_target,
+        output next_pc_is_branch_target,
         output next_pc_is_jar_target,
         output next_pc_is_jr_target,
 
@@ -35,10 +30,7 @@ module control(
         output reg_write_addr_is_31,
         output reg_write_is_alu,
         output reg_write_is_mem,
-        output reg_write_is_imm,
-
-        input branch,
-        output branch_next
+        output reg_write_is_imm
     );
     wire data_sram_wen_1_bit;
     assign data_sram_wen = {4{data_sram_wen_1_bit}};
@@ -67,17 +59,11 @@ module control(
     wire is_j      = opcode == 6'b000010;
     wire is_jal    = opcode == 6'b000011;
 
-    assign branch_next = (is_beq & is_eq) | (is_bne & ~is_eq);
-    assign jar_next = is_jal;
-    assign jr_next = is_R_type & func_jr;
-
-    assign next_pc_is_target     = is_delay_slot & branch;
-    assign next_pc_is_jar_target = is_delay_slot & jar;
-    assign next_pc_is_jr_target  = is_delay_slot & jr;
-    assign next_pc_is_next       =
-           ~next_pc_is_target & ~next_pc_is_jar_target & ~next_pc_is_jr_target;
-
-    assign is_delay_slot_next = is_beq | is_bne | is_jal | (is_R_type & func_jr);
+    assign next_pc_is_branch_target = is_IF_ID_valid & ((is_beq & is_eq) | (is_bne & ~is_eq));
+    assign next_pc_is_jar_target    = is_IF_ID_valid & is_jal;
+    assign next_pc_is_jr_target     = is_IF_ID_valid & is_R_type & func_jr;
+    assign next_pc_is_next          =
+           ~next_pc_is_branch_target & ~next_pc_is_jar_target & ~next_pc_is_jr_target;
 
     assign reg_write =
            (is_R_type)
@@ -92,7 +78,7 @@ module control(
 
     wire is_shift = is_R_type & (func_sll | func_srl | func_sra);
 
-    assign alu_a_is_pc = is_jal;
+    assign alu_a_is_pc      = is_jal;
     assign alu_a_is_rt_data = is_shift;
     assign alu_a_is_rs_data = ~alu_a_is_pc & ~alu_a_is_rt_data;
 

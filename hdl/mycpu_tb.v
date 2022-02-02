@@ -122,14 +122,11 @@ module tb_top( );
     reg [4 :0] ref_wb_rf_wnum;
     reg [31:0] ref_wb_rf_wdata;
     integer a;
-    always @(posedge soc_clk)begin
-        if (resetn) begin
-            #1;
-            if(|debug_wb_rf_wen && debug_wb_rf_wnum!=5'd0 && !debug_end && `CONFREG_OPEN_TRACE)begin
-                trace_cmp_flag=1'b0;
-                while (!trace_cmp_flag && !($feof(trace_ref)))begin
-                    a = $fscanf(trace_ref, "%h %h %h %h", trace_cmp_flag, ref_wb_pc, ref_wb_rf_wnum, ref_wb_rf_wdata);
-                end
+    always @(negedge soc_clk)begin
+        if(|debug_wb_rf_wen && debug_wb_rf_wnum!=5'd0 && !debug_end && `CONFREG_OPEN_TRACE)begin
+            trace_cmp_flag=1'b0;
+            while (!trace_cmp_flag && !($feof(trace_ref)))begin
+                a = $fscanf(trace_ref, "%h %h %h %h", trace_cmp_flag, ref_wb_pc, ref_wb_rf_wnum, ref_wb_rf_wdata);
             end
         end
     end
@@ -150,7 +147,6 @@ module tb_top( );
     //compare result in rsing edge
     reg debug_wb_err;
     always @(posedge soc_clk)begin
-        #2;
         if(!resetn)begin
             debug_wb_err <= 1'b0;
         end
