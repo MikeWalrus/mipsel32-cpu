@@ -21,63 +21,33 @@ module mycpu_top(
     );
     wire reset;
     assign reset = ~resetn;
-
     assign inst_sram_en = 1;
+
+    wire [3:0] data_sram_wen_ID;
+    wire [3:0] data_sram_wen_EX;
 
     wire [31:0] instruction_IF = inst_sram_rdata;
     wire [31:0] instruction_ID;
 
-
     wire [11:0] alu_op_ID;
 
     wire [31:0] curr_pc_IF;
+    wire [31:0] curr_pc_ID;
     wire [31:0] next_pc;
-    pc pc(
-           .clk(clk),
-           .reset(reset),
-           .next(next_pc),
-           .out(curr_pc_IF)
-       );
 
     wire next_pc_is_next;
     wire next_pc_is_branch_target;
     wire next_pc_is_jar_target;
     wire next_pc_is_jr_target;
-    mux_1h #(.num_port(4)) next_pc_mux(
-               .select({next_pc_is_next , next_pc_is_branch_target, next_pc_is_jar_target, next_pc_is_jr_target}),
-               .in(    {curr_pc_IF+32'd4, branch_target           , jar_target           , jr_target           }),
-               .out(next_pc)
-           );
+
+    wire [31:0] rs_data_ID;
+    wire [31:0] rt_data_ID;
+    wire is_eq = rs_data_ID == rt_data_ID;
+
 
     wire [31:0] jr_target = rs_data_ID;
-
-    addr_trans addr_trans_inst(
-                   .virt_addr(next_pc),
-                   .phy_addr(inst_sram_addr)
-               );
-
-    wire [31:0] curr_pc_ID;
-
-    reg start;
-    always @(posedge clk) begin
-        if (reset)
-            start <= 0;
-        else
-            start <= 1;
-    end
-
-    wire IF_ID_reg_valid_out;
-    wire IF_ID_reg_allow_out;
-    pipeline_reg #(.WIDTH(32 + 32)) IF_ID_reg(
-                     .clk(clk),
-                     .reset(reset),
-                     .valid_in(start),
-                     .allow_in(),
-                     .allow_out(IF_ID_reg_allow_out),
-                     .valid_out(IF_ID_reg_valid_out),
-                     .in({curr_pc_IF, instruction_IF}),
-                     .out({curr_pc_ID, instruction_ID})
-                 );
+    wire [31:0] branch_target;
+    wire [31:0] jar_target = {curr_pc_IF[31:28] ,instruction_ID[25:0], {2{1'b0}}};
 
     wire [5:0] opcode;
     wire [4:0] rs;
@@ -87,78 +57,28 @@ module mycpu_top(
     wire [15:0] inst_imm;
     wire [5:0] func;
 
-    assign opcode   = instruction_ID[31:26];
-    assign rs       = instruction_ID[25:21];
-    assign rt       = instruction_ID[20:16];
-    assign rd       = instruction_ID[15:11];
-    assign shamt_ID = instruction_ID[10:6];
-    assign inst_imm = instruction_ID[15:0];
-    assign func     = instruction_ID[5:0];
-
-    wire [31:0] rs_data_ID;
-    wire [31:0] rt_data_ID;
-    wire [31:0] reg_write_data;
-    wire [4:0] reg_write_addr;
-    regfile regfile (
-                .clk(clk),
-                .r_addr1(rs),
-                .r_data1(rs_data_ID),
-                .r_addr2(rt),
-                .r_data2(rt_data_ID),
-                .w_enable(reg_write_WB & MEM_WB_reg_valid_out),
-                .w_addr(reg_write_addr),
-                .w_data(reg_write_data)
-            );
-
     wire [31:0] imm_ID;
-    imm_gen imm_gen(
-                .inst_imm(inst_imm),
-                .imm(imm_ID)
-            );
-
     wire [31:0] imm_EX;
+    wire [31:0] imm_MEM;
+    wire [31:0] imm_WB;
+
     wire [31:0] rs_data_EX;
     wire [31:0] rt_data_EX;
+
     wire [31:0] curr_pc_EX;
+    wire [31:0] curr_pc_MEM;
+    wire [31:0] curr_pc_WB;
+
     wire [4:0]  shamt_EX;
-
-    wire ID_EX_reg_valid_in = IF_ID_reg_valid_out;
-    wire ID_EX_reg_valid_out;
-    wire ID_EX_reg_allow_out;
-    pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 + 19 + 17 + 4 + 5)) ID_EX_reg(
-                     .clk(clk),
-                     .reset(reset),
-                     .valid_in(ID_EX_reg_valid_in),
-                     .allow_in(IF_ID_reg_allow_out),
-                     .valid_out(ID_EX_reg_valid_out),
-                     .allow_out(ID_EX_reg_allow_out),
-                     .in({curr_pc_ID, rs_data_ID, rt_data_ID, imm_ID, alu_ctrl_ID,
-                          reg_write_sig_ID, data_sram_wen_ID, shamt_ID}),
-                     .out({curr_pc_EX, rs_data_EX, rt_data_EX, imm_EX, alu_ctrl_EX,
-                           reg_write_sig_EX, data_sram_wen_EX, shamt_EX})
-                 );
-
-    assign data_sram_wdata = rt_data_EX;
-    wire is_eq = rs_data_ID == rt_data_ID;
-
-    wire [31:0] branch_target;
-    branch_target_gen branch_target_gen(
-                          .pc(curr_pc_IF),
-                          .offset(inst_imm),
-                          .target(branch_target)
-                      );
-    wire [31:0] jar_target = {curr_pc_IF[31:28] ,instruction_ID[25:0], {2{1'b0}}};
 
     wire [31:0] alu_a;
     wire [31:0] alu_b;
+
     wire [31:0] alu_result_EX;
+    wire [31:0] alu_result_MEM;
+    wire [31:0] alu_result_WB;
+
     wire [11:0] alu_op_EX;
-    alu alu(
-            .op(alu_op_EX),
-            .a(alu_a),
-            .b(alu_b),
-            .result(alu_result_EX)
-        );
 
     wire alu_a_is_rs_data_ID;
     wire alu_a_is_rt_data_ID;
@@ -178,17 +98,158 @@ module mycpu_top(
     wire alu_b_is_8_EX;
     wire alu_b_is_shamt_EX;
 
-    wire [18:0] alu_ctrl_ID = {
-             alu_a_is_pc_ID,
-             alu_a_is_rs_data_ID,
-             alu_a_is_rt_data_ID,
-             alu_b_is_8_ID,
-             alu_b_is_imm_ID,
-             alu_b_is_shamt_ID,
-             alu_b_is_rt_data_ID,
-             alu_op_ID
-         };
+    wire [18:0] alu_ctrl_ID;
     wire [18:0] alu_ctrl_EX;
+
+    wire [31:0] data_sram_rdata_MEM = data_sram_rdata;
+    wire [31:0] data_sram_rdata_WB;
+
+    wire reg_write_ID;
+    wire reg_write_addr_is_rt_ID;
+    wire reg_write_addr_is_rd_ID;
+    wire reg_write_addr_is_31_ID;
+    wire reg_write_is_alu_ID;
+    wire reg_write_is_mem_ID;
+    wire reg_write_is_imm_ID;
+
+    wire [16:0] reg_write_sig_ID;
+    wire [16:0] reg_write_sig_EX;
+    wire [16:0] reg_write_sig_MEM;
+    wire [16:0] reg_write_sig_WB;
+
+    wire reg_write_WB;
+    wire reg_write_addr_is_rt_WB;
+    wire reg_write_addr_is_rd_WB;
+    wire reg_write_addr_is_31_WB;
+    wire reg_write_is_alu_WB;
+    wire reg_write_is_mem_WB;
+    wire reg_write_is_imm_WB;
+
+    wire [4:0] rd_WB;
+    wire [4:0] rt_WB;
+
+    wire [31:0] reg_write_data;
+    wire [4:0] reg_write_addr;
+
+    // pipeline registers
+    wire IF_ID_reg_valid_out;
+    wire IF_ID_reg_allow_out;
+
+    wire ID_EX_reg_valid_in = IF_ID_reg_valid_out;
+    wire ID_EX_reg_valid_out;
+    wire ID_EX_reg_allow_out;
+
+    wire EX_MEM_reg_valid_in = ID_EX_reg_valid_out;
+    wire EX_MEM_reg_valid_out;
+    wire EX_MEM_reg_allow_out;
+
+    wire MEM_WB_reg_valid_in = EX_MEM_reg_valid_out;
+    wire MEM_WB_reg_valid_out;
+    wire MEM_WB_reg_allow_out = 1;
+
+    pc pc(
+           .clk(clk),
+           .reset(reset),
+           .next(next_pc),
+           .out(curr_pc_IF)
+       );
+
+    mux_1h #(.num_port(4)) next_pc_mux(
+               .select({next_pc_is_next , next_pc_is_branch_target, next_pc_is_jar_target, next_pc_is_jr_target}),
+               .in(    {curr_pc_IF+32'd4, branch_target           , jar_target           , jr_target           }),
+               .out(next_pc)
+           );
+
+
+    addr_trans addr_trans_inst(
+                   .virt_addr(next_pc),
+                   .phy_addr(inst_sram_addr)
+               );
+
+
+    reg start;
+    always @(posedge clk) begin
+        if (reset)
+            start <= 0;
+        else
+            start <= 1;
+    end
+
+    pipeline_reg #(.WIDTH(32 + 32)) IF_ID_reg(
+                     .clk(clk),
+                     .reset(reset),
+                     .valid_in(start),
+                     .allow_in(),
+                     .allow_out(IF_ID_reg_allow_out),
+                     .valid_out(IF_ID_reg_valid_out),
+                     .in({curr_pc_IF, instruction_IF}),
+                     .out({curr_pc_ID, instruction_ID})
+                 );
+
+
+    assign opcode   = instruction_ID[31:26];
+    assign rs       = instruction_ID[25:21];
+    assign rt       = instruction_ID[20:16];
+    assign rd       = instruction_ID[15:11];
+    assign shamt_ID = instruction_ID[10:6];
+    assign inst_imm = instruction_ID[15:0];
+    assign func     = instruction_ID[5:0];
+
+    regfile regfile (
+                .clk(clk),
+                .r_addr1(rs),
+                .r_data1(rs_data_ID),
+                .r_addr2(rt),
+                .r_data2(rt_data_ID),
+                .w_enable(reg_write_WB & MEM_WB_reg_valid_out),
+                .w_addr(reg_write_addr),
+                .w_data(reg_write_data)
+            );
+
+    imm_gen imm_gen(
+                .inst_imm(inst_imm),
+                .imm(imm_ID)
+            );
+
+
+    pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 + 19 + 17 + 4 + 5)) ID_EX_reg(
+                     .clk(clk),
+                     .reset(reset),
+                     .valid_in(ID_EX_reg_valid_in),
+                     .allow_in(IF_ID_reg_allow_out),
+                     .valid_out(ID_EX_reg_valid_out),
+                     .allow_out(ID_EX_reg_allow_out),
+                     .in({curr_pc_ID, rs_data_ID, rt_data_ID, imm_ID, alu_ctrl_ID,
+                          reg_write_sig_ID, data_sram_wen_ID, shamt_ID}),
+                     .out({curr_pc_EX, rs_data_EX, rt_data_EX, imm_EX, alu_ctrl_EX,
+                           reg_write_sig_EX, data_sram_wen_EX, shamt_EX})
+                 );
+
+    assign data_sram_wdata = rt_data_EX;
+
+    branch_target_gen branch_target_gen(
+                          .pc(curr_pc_IF),
+                          .offset(inst_imm),
+                          .target(branch_target)
+                      );
+
+    alu alu(
+            .op(alu_op_EX),
+            .a(alu_a),
+            .b(alu_b),
+            .result(alu_result_EX)
+        );
+
+    assign alu_ctrl_ID = {
+               alu_a_is_pc_ID,
+               alu_a_is_rs_data_ID,
+               alu_a_is_rt_data_ID,
+               alu_b_is_8_ID,
+               alu_b_is_imm_ID,
+               alu_b_is_shamt_ID,
+               alu_b_is_rt_data_ID,
+               alu_op_ID
+           };
     assign {
             alu_a_is_pc_EX,
             alu_a_is_rs_data_EX,
@@ -217,13 +278,6 @@ module mycpu_top(
                    .phy_addr(data_sram_addr)
                );
 
-    wire [31:0] curr_pc_MEM;
-    wire [31:0] alu_result_MEM;
-    wire [31:0] imm_MEM;
-
-    wire EX_MEM_reg_valid_in = ID_EX_reg_valid_out;
-    wire EX_MEM_reg_valid_out;
-    wire EX_MEM_reg_allow_out;
     pipeline_reg #(.WIDTH(32 + 17 + 32 + 32)) EX_MEM_reg(
                      .clk(clk),
                      .reset(reset),
@@ -235,16 +289,7 @@ module mycpu_top(
                      .out({curr_pc_MEM, reg_write_sig_MEM, alu_result_MEM, imm_MEM})
                  );
 
-    wire [31:0] data_sram_rdata_MEM = data_sram_rdata;
 
-    wire [31:0] data_sram_rdata_WB;
-    wire [31:0] curr_pc_WB;
-    wire [31:0] alu_result_WB;
-    wire [31:0] imm_WB;
-
-    wire MEM_WB_reg_valid_in = EX_MEM_reg_valid_out;
-    wire MEM_WB_reg_valid_out;
-    wire MEM_WB_reg_allow_out = 1;
     pipeline_reg #(.WIDTH(32 + 32 + 17 + 32 + 32)) MEM_WB_reg(
                      .clk(clk),
                      .reset(reset),
@@ -256,39 +301,18 @@ module mycpu_top(
                      .out({curr_pc_WB, data_sram_rdata_WB, reg_write_sig_WB, alu_result_WB, imm_WB})
                  );
 
-    wire reg_write_ID;
-    wire reg_write_addr_is_rt_ID;
-    wire reg_write_addr_is_rd_ID;
-    wire reg_write_addr_is_31_ID;
-    wire reg_write_is_alu_ID;
-    wire reg_write_is_mem_ID;
-    wire reg_write_is_imm_ID;
 
-    wire reg_write_WB;
-    wire reg_write_addr_is_rt_WB;
-    wire reg_write_addr_is_rd_WB;
-    wire reg_write_addr_is_31_WB;
-    wire reg_write_is_alu_WB;
-    wire reg_write_is_mem_WB;
-    wire reg_write_is_imm_WB;
-
-    wire [4:0] rd_WB;
-    wire [4:0] rt_WB;
-
-    wire [16:0] reg_write_sig_ID = {
-             reg_write_ID,
-             reg_write_addr_is_rt_ID,
-             reg_write_addr_is_rd_ID,
-             reg_write_addr_is_31_ID,
-             reg_write_is_alu_ID,
-             reg_write_is_mem_ID,
-             reg_write_is_imm_ID,
-             rd,
-             rt
-         };
-    wire [16:0] reg_write_sig_EX;
-    wire [16:0] reg_write_sig_MEM;
-    wire [16:0] reg_write_sig_WB;
+    assign reg_write_sig_ID = {
+               reg_write_ID,
+               reg_write_addr_is_rt_ID,
+               reg_write_addr_is_rd_ID,
+               reg_write_addr_is_31_ID,
+               reg_write_is_alu_ID,
+               reg_write_is_mem_ID,
+               reg_write_is_imm_ID,
+               rd,
+               rt
+           };
     assign {
             reg_write_WB,
             reg_write_addr_is_rt_WB,
@@ -313,8 +337,6 @@ module mycpu_top(
                .out(reg_write_data)
            );
 
-    wire [3:0] data_sram_wen_ID;
-    wire [3:0] data_sram_wen_EX;
 
     control control(
                 .is_IF_ID_valid(IF_ID_reg_valid_out),

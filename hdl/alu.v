@@ -16,7 +16,7 @@ module alu(
     assign adder_a = a;
     assign adder_b = binvert ? ~b : b;
     assign {cout, adder_out} = adder_a + adder_b + {{32{1'b0}},cin};
-    assign signed_overflow = (a[31] != b[31]) && (a[31] != adder_out[31]);
+    wire signed_overflow = (a[31] != b[31]) && (a[31] != adder_out[31]);
 
     wire is_add  = op[`ALU_ADD];
     wire is_sub  = op[`ALU_SUB];
