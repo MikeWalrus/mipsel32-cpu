@@ -59,6 +59,30 @@ module control(
     wire is_j      = opcode == 6'b000010;
     wire is_jal    = opcode == 6'b000011;
 
+    wire func_add   = func == 6'b000001;
+    wire func_addu  = func == 6'b100001;
+    wire func_and   = func == 6'b100100;
+    wire func_div   = func == 6'b011010;
+    wire func_divu  = func == 6'b011011;
+    wire func_jalr  = func == 6'b001001;
+    wire func_jr    = func == 6'b001000;
+    wire func_mfhi  = func == 6'b010000;
+    wire func_mthi  = func == 6'b010001;
+    wire func_mflo  = func == 6'b010010;
+    wire func_mtlo  = func == 6'b010011;
+    wire func_mult  = func == 6'b011000;
+    wire func_multu = func == 6'b011001;
+    wire func_nor   = func == 6'b100111;
+    wire func_xor   = func == 6'b100110;
+    wire func_or    = func == 6'b100101;
+    wire func_slt   = func == 6'b101010;
+    wire func_sltu  = func == 6'b101011;
+    wire func_sll   = func == 6'b000000;
+    wire func_srl   = func == 6'b000010;
+    wire func_sra   = func == 6'b000011;
+    wire func_sub   = func == 6'b100010;
+    wire func_subu  = func == 6'b100011;
+
     assign next_pc_is_branch_target = is_IF_ID_valid & ((is_beq & is_eq) | (is_bne & ~is_eq));
     assign next_pc_is_jar_target    = is_IF_ID_valid & is_jal;
     assign next_pc_is_jr_target     = is_IF_ID_valid & is_R_type & func_jr;
@@ -91,29 +115,6 @@ module control(
 
     assign data_sram_wen_1_bit = is_sw;
 
-    wire func_add   = func == 6'b000001;
-    wire func_addu  = func == 6'b100001;
-    wire func_and   = func == 6'b100100;
-    wire func_div   = func == 6'b011010;
-    wire func_divu  = func == 6'b011011;
-    wire func_jalr  = func == 6'b001001;
-    wire func_jr    = func == 6'b001000;
-    wire func_mfhi  = func == 6'b010000;
-    wire func_mthi  = func == 6'b010001;
-    wire func_mflo  = func == 6'b010010;
-    wire func_mtlo  = func == 6'b010011;
-    wire func_mult  = func == 6'b011000;
-    wire func_multu = func == 6'b011001;
-    wire func_nor   = func == 6'b100111;
-    wire func_xor   = func == 6'b100110;
-    wire func_or    = func == 6'b100101;
-    wire func_slt   = func == 6'b101010;
-    wire func_sltu  = func == 6'b101011;
-    wire func_sll   = func == 6'b000000;
-    wire func_srl   = func == 6'b000010;
-    wire func_sra   = func == 6'b000011;
-    wire func_sub   = func == 6'b100010;
-    wire func_subu  = func == 6'b100011;
 
     assign alu_op =
            {12{

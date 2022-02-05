@@ -42,7 +42,7 @@ module mycpu_top(
 
     wire [31:0] rs_data_ID;
     wire [31:0] rt_data_ID;
-    wire is_eq = rs_data_ID == rt_data_ID;
+    (*MARK_DEBUG = "TRUE"*) wire is_eq = rs_data_ID == rt_data_ID;
 
 
     wire [31:0] jr_target = rs_data_ID;
@@ -67,7 +67,7 @@ module mycpu_top(
 
     wire [31:0] curr_pc_EX;
     wire [31:0] curr_pc_MEM;
-    wire [31:0] curr_pc_WB;
+    (*mark_debug = "true"*) wire [31:0] curr_pc_WB;
 
     wire [4:0]  shamt_EX;
 
