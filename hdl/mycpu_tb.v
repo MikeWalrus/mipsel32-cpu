@@ -32,7 +32,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------*/
 `timescale 1ns / 1ps
 
-`define TRACE_REF_FILE "golden_trace_s.txt"
+`define TRACE_REF_FILE "golden_trace.txt"
 `define CONFREG_NUM_REG      soc_lite.confreg.num_data
 `define CONFREG_OPEN_TRACE   soc_lite.confreg.open_trace
 `define CONFREG_NUM_MONITOR  soc_lite.confreg.num_monitor
@@ -110,7 +110,7 @@ module tb_top( );
 
     // intialise the rams
     initial begin
-        $readmemb("inst_ram_s.mif", soc_lite.inst_ram.ram.ram_);
+        $readmemb("inst_ram.mif", soc_lite.inst_ram.ram.ram_);
         $readmemb("data_ram.mif", soc_lite.data_ram.ram.ram_);
     end
 

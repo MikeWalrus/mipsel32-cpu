@@ -29,8 +29,7 @@ module control(
         output reg_write_addr_is_rt,
         output reg_write_addr_is_31,
         output reg_write_is_alu,
-        output reg_write_is_mem,
-        output reg_write_is_imm
+        output reg_write_is_mem
     );
     wire data_sram_wen_1_bit;
     assign data_sram_wen = {4{data_sram_wen_1_bit}};
@@ -97,8 +96,7 @@ module control(
     assign reg_write_addr_is_rt = ~reg_write_addr_is_31 & ~reg_write_addr_is_rd;
 
     assign reg_write_is_mem = is_lw;
-    assign reg_write_is_imm = 0;
-    assign reg_write_is_alu = ~reg_write_is_mem & ~reg_write_is_imm;
+    assign reg_write_is_alu = ~reg_write_is_mem;
 
     wire is_shift = is_R_type & (func_sll | func_srl | func_sra);
 
