@@ -17,7 +17,10 @@ $(TEST_TARGET_DIR):
 
 .INTERMEDIATE:
 $(TEST_TARGET_DIR)/%_test: %.v testbench/%_test.v $(TEST_TARGET_DIR) ./common.vh
-	iverilog -Wall -I testbench $*.v testbench/$*_test.v -o $@
+	iverilog -Wall -I testbench -I . $*.v testbench/$*_test.v -o $@
+
+$(TEST_TARGET_DIR)/div_test: div.v signed_to_abs.v testbench/div_test.v
+	iverilog -Wall $^ -o $@
 
 .PHONY:
 %_test: $(TEST_TARGET_DIR)/%_test
