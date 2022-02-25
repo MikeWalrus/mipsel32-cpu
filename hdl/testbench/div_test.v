@@ -19,7 +19,7 @@ module div_tb;
     div uut (
             .clk(div_clk),
             .reset(~resetn),
-            .start(div),
+            .en(div),
             .is_signed(div_signed),
             .dividend(x),
             .divisor(y),
