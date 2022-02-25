@@ -12,11 +12,13 @@ sim: *.v
 run_sim: sim
 	vvp ./sim -lxt2
 
-# $(TEST_TARGET_DIR):
-# 	mkdir $@
+$(TEST_TARGET_DIR):
+	mkdir $@
 
-# $(TEST_TARGET_DIR)/%_test: %.v testbench/%_test.v $(TEST_TARGET_DIR) ./common.vh
-# 	iverilog -Wall -I testbench $*.v testbench/$*_test.v -o $@
+.INTERMEDIATE:
+$(TEST_TARGET_DIR)/%_test: %.v testbench/%_test.v $(TEST_TARGET_DIR) ./common.vh
+	iverilog -Wall -I testbench $*.v testbench/$*_test.v -o $@
 
-# %_test: $(TEST_TARGET_DIR)/%_test
-# 	@! vvp $? | grep "FAILED"
+.PHONY:
+%_test: $(TEST_TARGET_DIR)/%_test
+	vvp $? -lxt2
