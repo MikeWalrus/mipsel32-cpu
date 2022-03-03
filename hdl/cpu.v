@@ -79,25 +79,23 @@ module mycpu_top(
     wire [11:0] alu_op_EX;
 
     wire alu_a_is_rs_data_ID;
-    wire alu_a_is_rt_data_ID;
+    wire alu_a_is_shamt_ID;
     wire alu_a_is_pc_ID;
 
     wire alu_a_is_rs_data_EX;
-    wire alu_a_is_rt_data_EX;
+    wire alu_a_is_shamt_EX;
     wire alu_a_is_pc_EX;
 
     wire alu_b_is_rt_data_ID;
     wire alu_b_is_imm_ID;
     wire alu_b_is_8_ID;
-    wire alu_b_is_shamt_ID;
 
     wire alu_b_is_rt_data_EX;
     wire alu_b_is_imm_EX;
     wire alu_b_is_8_EX;
-    wire alu_b_is_shamt_EX;
 
-    wire [18:0] alu_ctrl_ID;
-    wire [18:0] alu_ctrl_EX;
+    wire [17:0] alu_ctrl_ID;
+    wire [17:0] alu_ctrl_EX;
 
     wire [31:0] data_sram_rdata_MEM = data_sram_rdata;
 
@@ -120,17 +118,12 @@ module mycpu_top(
     wire [4:0] reg_write_addr_MEM;
 
     wire reg_write_WB;
-    wire reg_write_is_alu_WB;
-    wire reg_write_is_mem_WB;
     wire [4:0] reg_write_addr_WB;
 
     wire [7:0] reg_write_sig_ID;
     wire [7:0] reg_write_sig_EX;
     wire [7:0] reg_write_sig_MEM;
     wire [37:0] reg_write_sig_WB;
-
-    wire [4:0] rd_WB;
-    wire [4:0] rt_WB;
 
     wire [31:0] reg_write_data_MEM;
     wire [31:0] reg_write_data_WB;
@@ -225,9 +218,13 @@ module mycpu_top(
                 .w_data(reg_write_data_WB)
             );
 
+    wire [31:0] imm_sign_extended;
+    wire imm_is_sign_extend;
+    assign imm_ID = imm_is_sign_extend ? imm_sign_extended : {16'b0,inst_imm};
+
     imm_gen imm_gen(
                 .inst_imm(inst_imm),
-                .imm(imm_ID)
+                .imm(imm_sign_extended)
             );
 
     wire rs_data_ID_is_no_forward;
@@ -316,7 +313,7 @@ module mycpu_top(
                       .IF_ID_reg_stall(IF_ID_reg_stall)
                   );
 
-    pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 + 19 + 8 + 4 + 5)) ID_EX_reg(
+    pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 + 18 + 8 + 4 + 5)) ID_EX_reg(
                      .clk(clk),
                      .reset(reset),
                      .stall(ID_EX_reg_stall),
@@ -349,32 +346,30 @@ module mycpu_top(
     assign alu_ctrl_ID = {
                alu_a_is_pc_ID,
                alu_a_is_rs_data_ID,
-               alu_a_is_rt_data_ID,
+               alu_a_is_shamt_ID,
                alu_b_is_8_ID,
                alu_b_is_imm_ID,
-               alu_b_is_shamt_ID,
                alu_b_is_rt_data_ID,
                alu_op_ID
            };
     assign {
             alu_a_is_pc_EX,
             alu_a_is_rs_data_EX,
-            alu_a_is_rt_data_EX,
+            alu_a_is_shamt_EX,
             alu_b_is_8_EX,
             alu_b_is_imm_EX,
-            alu_b_is_shamt_EX,
             alu_b_is_rt_data_EX,
             alu_op_EX
         } = alu_ctrl_EX;
 
     mux_1h #(.num_port(3)) alu_a_mux(
-               .select({alu_a_is_rs_data_EX, alu_a_is_rt_data_EX, alu_a_is_pc_EX}),
-               .in(    {rs_data_EX         , rt_data_EX         , curr_pc_EX }),
+               .select({alu_a_is_rs_data_EX, alu_a_is_shamt_EX            , alu_a_is_pc_EX}),
+               .in(    {rs_data_EX         , {{27{1'b0}}, {shamt_EX[4:0]}}, curr_pc_EX }),
                .out(alu_a)
            );
-    mux_1h #(.num_port(4)) alu_b_mux(
-               .select({alu_b_is_rt_data_EX, alu_b_is_imm_EX, alu_b_is_8_EX, alu_b_is_shamt_EX}),
-               .in(    {rt_data_EX         , imm_EX         , 32'h8        , {{27{1'b0}}, {shamt_EX[4:0]}}}),
+    mux_1h #(.num_port(3)) alu_b_mux(
+               .select({alu_b_is_rt_data_EX, alu_b_is_imm_EX, alu_b_is_8_EX}),
+               .in(    {rt_data_EX         , imm_EX         , 32'h8        }),
                .out(alu_b)
            );
 
@@ -462,14 +457,15 @@ module mycpu_top(
                 .next_pc_is_jar_target(next_pc_is_jar_target),
                 .next_pc_is_jr_target(next_pc_is_jr_target),
 
+                .imm_is_sign_extend(imm_is_sign_extend),
+
                 .alu_op(alu_op_ID),
                 .alu_a_is_pc(alu_a_is_pc_ID),
                 .alu_a_is_rs_data(alu_a_is_rs_data_ID),
-                .alu_a_is_rt_data(alu_a_is_rt_data_ID),
+                .alu_a_is_shamt(alu_a_is_shamt_ID),
                 .alu_b_is_rt_data(alu_b_is_rt_data_ID),
                 .alu_b_is_imm(alu_b_is_imm_ID),
                 .alu_b_is_8(alu_b_is_8_ID),
-                .alu_b_is_shamt(alu_b_is_shamt_ID),
 
                 .data_sram_en(data_sram_en),
                 .data_sram_wen(data_sram_wen_ID),

@@ -11,15 +11,16 @@ module control(
         output next_pc_is_jar_target,
         output next_pc_is_jr_target,
 
+        output imm_is_sign_extend,
+
         output [11:0] alu_op,
         output alu_a_is_pc,
         output alu_a_is_rs_data,
-        output alu_a_is_rt_data,
+        output alu_a_is_shamt,
 
         output alu_b_is_rt_data,
         output alu_b_is_imm,
         output alu_b_is_8,
-        output alu_b_is_shamt,
 
         output data_sram_en,
         output [3:0] data_sram_wen,
@@ -36,6 +37,7 @@ module control(
 
 
     wire is_R_type = opcode == 6'b000000;
+    wire imm_arith;
 
     wire is_addi   = opcode == 6'b001000;
     wire is_addiu  = opcode == 6'b001001;
@@ -50,6 +52,7 @@ module control(
     wire is_lui    = opcode == 6'b001111;
     wire is_lw     = opcode == 6'b100011;
     wire is_ori    = opcode == 6'b001101;
+    wire is_xori   = opcode == 6'b001110;
     wire is_sb     = opcode == 6'b101000;
     wire is_sh     = opcode == 6'b101001;
     wire is_slti   = opcode == 6'b001010;
@@ -58,7 +61,7 @@ module control(
     wire is_j      = opcode == 6'b000010;
     wire is_jal    = opcode == 6'b000011;
 
-    wire func_add   = func == 6'b000001;
+    wire func_add   = func == 6'b100000;
     wire func_addu  = func == 6'b100001;
     wire func_and   = func == 6'b100100;
     wire func_div   = func == 6'b011010;
@@ -77,8 +80,11 @@ module control(
     wire func_slt   = func == 6'b101010;
     wire func_sltu  = func == 6'b101011;
     wire func_sll   = func == 6'b000000;
+    wire func_sllv  = func == 6'b000100;
     wire func_srl   = func == 6'b000010;
+    wire func_srlv  = func == 6'b000110;
     wire func_sra   = func == 6'b000011;
+    wire func_srav  = func == 6'b000111;
     wire func_sub   = func == 6'b100010;
     wire func_subu  = func == 6'b100011;
 
@@ -88,9 +94,16 @@ module control(
     assign next_pc_is_next          =
            ~next_pc_is_branch_target & ~next_pc_is_jar_target & ~next_pc_is_jr_target;
 
+    assign imm_arith =
+        is_addiu | is_addi | is_slti | is_sltiu | is_lui |
+        is_andi  | is_ori  | is_xori;
+
+    assign imm_is_sign_extend = ~(is_andi | is_ori | is_xori);
+
     assign reg_write =
            (is_R_type)
-           | is_addiu | is_lw | is_jal | is_lui;
+           | is_lw | is_jal
+           | imm_arith;
     assign reg_write_addr_is_rd = is_R_type;
     assign reg_write_addr_is_31 = is_jal;
     assign reg_write_addr_is_rt = ~reg_write_addr_is_31 & ~reg_write_addr_is_rd;
@@ -98,16 +111,17 @@ module control(
     assign reg_write_is_mem = is_lw;
     assign reg_write_is_alu = ~reg_write_is_mem;
 
-    wire is_shift = is_R_type & (func_sll | func_srl | func_sra);
+    wire shift_const = is_R_type & (func_sll | func_srl | func_sra);
 
     assign alu_a_is_pc      = is_jal;
-    assign alu_a_is_rt_data = is_shift;
-    assign alu_a_is_rs_data = ~alu_a_is_pc & ~alu_a_is_rt_data;
+    assign alu_a_is_shamt = shift_const;
+    assign alu_a_is_rs_data = ~alu_a_is_pc & ~alu_a_is_shamt;
 
-    assign alu_b_is_rt_data = is_R_type & ~is_shift;
-    assign alu_b_is_imm     = is_addiu | is_sw | is_lw | is_lui;
+    assign alu_b_is_rt_data = is_R_type;
+    assign alu_b_is_imm     =
+           is_sw | is_lw |
+           imm_arith;
     assign alu_b_is_8       = is_jal;
-    assign alu_b_is_shamt   = is_shift;
 
     assign data_sram_en = 1;
 
@@ -117,37 +131,40 @@ module control(
     assign alu_op =
            {12{
                 (is_R_type & (func_add | func_addu))
-                | is_addiu | is_lw | is_sw | is_jal
+                | is_addiu | is_addi | is_lw | is_sw | is_jal
             }} & `ALU_OP(`ALU_ADD) |
            {12{
-                (is_R_type & func_subu)
+                (is_R_type & (func_subu | func_sub))
             }} & `ALU_OP(`ALU_SUB) |
            {12{
-                (is_R_type & func_slt)
+                (is_R_type & func_slt) | is_slti
             }} & `ALU_OP(`ALU_SLT) |
            {12{
-                (is_R_type & func_sltu)
+                (is_R_type & func_sltu) | is_sltiu
             }} & `ALU_OP(`ALU_SLTU)|
            {12{
-                (is_R_type & func_sll)
+                (is_R_type & (func_sll | func_sllv))
             }} & `ALU_OP(`ALU_SLL) |
            {12{
-                (is_R_type & func_srl)
+                (is_R_type & (func_srl | func_srlv))
             }} & `ALU_OP(`ALU_SRL) |
            {12{
-                (is_R_type & func_sra)
+                (is_R_type & (func_sra | func_srav ))
             }} & `ALU_OP(`ALU_SRA) |
            {12{
                 (is_lui)
             }} & `ALU_OP(`ALU_LUI) |
            {12{
                 (is_R_type & func_or)
+                | is_ori
             }} & `ALU_OP(`ALU_OR)  |
            {12{
                 (is_R_type & func_xor)
+                | is_xori
             }} & `ALU_OP(`ALU_XOR) |
            {12{
                 (is_R_type & func_and)
+                | is_andi
             }} & `ALU_OP(`ALU_AND) |
            {12{
                 (is_R_type & func_nor)

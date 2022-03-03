@@ -219,10 +219,7 @@ module tb_top( );
 
     always @(posedge soc_clk)begin
         if(uart_display)begin
-            if(uart_data==8'hff)begin
-                ;//$finish;
-            end
-            else begin
+            if(uart_data!=8'hff)begin
                 $write("%c",uart_data);
             end
         end
