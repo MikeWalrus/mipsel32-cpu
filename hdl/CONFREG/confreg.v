@@ -319,7 +319,11 @@ module confreg
     //led display
     //led_data[31:0]
     wire write_led = conf_we & (conf_addr[15:0]==`LED_ADDR);
+`ifdef NEXYS_4_DDR
     assign led = ~led_data[15:0];
+`else
+    assign led = led_data[15:0];
+`endif
     always @(posedge clk)begin
         if(!resetn)begin
             led_data <= 32'h0;
@@ -516,8 +520,13 @@ module confreg
     //bfd0_f010           bfd0_f014
     wire write_led_rg0 = conf_we & (conf_addr[15:0]==`LED_RG0_ADDR);
     wire write_led_rg1 = conf_we & (conf_addr[15:0]==`LED_RG1_ADDR);
+`ifdef NEXYS_4_DDR
     assign led_rg0 = ~led_rg0_data[1:0];
     assign led_rg1 = ~led_rg1_data[1:0];
+`else
+    assign led_rg0 = led_rg0_data[1:0];
+    assign led_rg1 = led_rg1_data[1:0];
+`endif
     always @(posedge clk)begin
         if(!resetn)begin
             led_rg0_data <= 32'h0;
@@ -612,6 +621,7 @@ module confreg
         end
         else begin
             case ( scan_data )
+`ifdef NEXYS_4_DDR
                 4'd0 :
                     num_a_g <= 7'b1000000;   //0
                 4'd1 :
@@ -644,6 +654,40 @@ module confreg
                     num_a_g <= 7'b0000110;   //e
                 4'd15:
                     num_a_g <= 7'b0001110;   //f
+`else
+                4'd0 :
+                    num_a_g <= 7'b1111110;   //0
+                4'd1 :
+                    num_a_g <= 7'b0110000;   //1
+                4'd2 :
+                    num_a_g <= 7'b1101101;   //2
+                4'd3 :
+                    num_a_g <= 7'b1111001;   //3
+                4'd4 :
+                    num_a_g <= 7'b0110011;   //4
+                4'd5 :
+                    num_a_g <= 7'b1011011;   //5
+                4'd6 :
+                    num_a_g <= 7'b1011111;   //6
+                4'd7 :
+                    num_a_g <= 7'b1110000;   //7
+                4'd8 :
+                    num_a_g <= 7'b1111111;   //8
+                4'd9 :
+                    num_a_g <= 7'b1111011;   //9
+                4'd10:
+                    num_a_g <= 7'b1110111;   //a
+                4'd11:
+                    num_a_g <= 7'b0011111;   //b
+                4'd12:
+                    num_a_g <= 7'b1001110;   //c
+                4'd13:
+                    num_a_g <= 7'b0111101;   //d
+                4'd14:
+                    num_a_g <= 7'b1001111;   //e
+                4'd15:
+                    num_a_g <= 7'b1000111;   //f
+`endif
             endcase
         end
     end
