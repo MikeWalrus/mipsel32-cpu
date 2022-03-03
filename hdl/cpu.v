@@ -42,7 +42,7 @@ module mycpu_top(
 
     wire [31:0] rs_data_ID;
     wire [31:0] rt_data_ID;
-    (*MARK_DEBUG = "TRUE"*)              wire is_eq = rs_data_ID == rt_data_ID;
+    wire is_eq = rs_data_ID == rt_data_ID;
 
 
     wire [31:0] jr_target = rs_data_ID;
@@ -66,15 +66,15 @@ module mycpu_top(
 
     wire [31:0] curr_pc_EX;
     wire [31:0] curr_pc_MEM;
-    (*MARK_DEBUG = "true"*)              wire [31:0] curr_pc_WB;
+    (*MARK_DEBUG = "true"*) wire [31:0] curr_pc_WB;
 
     wire [4:0]  shamt_EX;
 
     wire [31:0] alu_a;
     wire [31:0] alu_b;
 
-    wire [31:0] alu_result_EX;
-    wire [31:0] alu_result_MEM;
+    wire [31:0] result_EX;
+    wire [31:0] result_MEM;
 
     wire [11:0] alu_op_EX;
 
@@ -138,7 +138,7 @@ module mycpu_top(
     wire ID_EX_reg_valid_in = IF_ID_reg_valid_out;
     wire ID_EX_reg_valid_out;
     wire ID_EX_reg_allow_out;
-    wire ID_EX_reg_stall = 0;
+    wire ID_EX_reg_stall;
     wire ID_EX_reg_valid;
 
     wire EX_MEM_reg_valid_in = ID_EX_reg_valid_out;
@@ -243,7 +243,7 @@ module mycpu_top(
                .in(
                    {
                        rs_data_ID_no_forward,
-                       alu_result_EX,
+                       result_EX,
                        reg_write_data_MEM,
                        reg_write_data_WB
                    }),
@@ -266,7 +266,7 @@ module mycpu_top(
                .in(
                    {
                        rt_data_ID_no_forward,
-                       alu_result_EX,
+                       result_EX,
                        reg_write_data_MEM,
                        reg_write_data_WB
                    }),
@@ -313,7 +313,7 @@ module mycpu_top(
                       .IF_ID_reg_stall(IF_ID_reg_stall)
                   );
 
-    pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 + 18 + 8 + 4 + 5)) ID_EX_reg(
+    pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 + 18 + 8 + 4 + 5 + 9)) ID_EX_reg(
                      .clk(clk),
                      .reset(reset),
                      .stall(ID_EX_reg_stall),
@@ -322,9 +322,9 @@ module mycpu_top(
                      .valid_out(ID_EX_reg_valid_out),
                      .allow_out(ID_EX_reg_allow_out),
                      .in({curr_pc_ID, rs_data_ID, rt_data_ID, imm_ID, alu_ctrl_ID,
-                          reg_write_sig_ID, data_sram_wen_ID, shamt_ID}),
+                          reg_write_sig_ID, data_sram_wen_ID, shamt_ID, mult_div_ctrl_ID}),
                      .out({curr_pc_EX, rs_data_EX, rt_data_EX, imm_EX, alu_ctrl_EX,
-                           reg_write_sig_EX, data_sram_wen_EX, shamt_EX}),
+                           reg_write_sig_EX, data_sram_wen_EX, shamt_EX, mult_div_ctrl_EX}),
                      .valid(ID_EX_reg_valid)
                  );
 
@@ -336,11 +336,13 @@ module mycpu_top(
                           .target(branch_target)
                       );
 
+    wire [31:0] alu_result;
+
     alu alu(
             .op(alu_op_EX),
             .a(alu_a),
             .b(alu_b),
-            .result(alu_result_EX)
+            .result(alu_result)
         );
 
     assign alu_ctrl_ID = {
@@ -375,9 +377,82 @@ module mycpu_top(
 
     assign data_sram_wen = data_sram_wen_EX;
     addr_trans addr_trans_data(
-                   .virt_addr(alu_result_EX),
+                   .virt_addr(result_EX),
                    .phy_addr(data_sram_addr)
                );
+
+    wire is_result_alu_ID;
+    wire is_result_lo_ID;
+    wire is_result_hi_ID;
+    wire is_result_alu_EX;
+    wire is_result_lo_EX;
+    wire is_result_hi_EX;
+
+    wire is_div_ID;
+    wire is_divu_ID;
+    wire is_mult_ID;
+    wire is_multu_ID;
+    wire hi_wen_ID;
+    wire lo_wen_ID;
+
+    wire is_div_EX;
+    wire is_divu_EX;
+    wire is_mult_EX;
+    wire is_multu_EX;
+    wire hi_wen_EX;
+    wire lo_wen_EX;
+
+    wire [8:0] mult_div_ctrl_ID;
+    wire [8:0] mult_div_ctrl_EX;
+    assign mult_div_ctrl_ID = {
+               is_div_ID,
+               is_divu_ID,
+               is_mult_ID,
+               is_multu_ID,
+               hi_wen_ID,
+               lo_wen_ID,
+               is_result_lo_ID,
+               is_result_hi_ID,
+               is_result_alu_ID
+           };
+    assign {
+            is_div_EX,
+            is_divu_EX,
+            is_mult_EX,
+            is_multu_EX,
+            hi_wen_EX,
+            lo_wen_EX,
+            is_result_lo_EX,
+            is_result_hi_EX,
+            is_result_alu_EX
+        } = mult_div_ctrl_EX;
+
+    wire mult_div_complete;
+    assign ID_EX_reg_stall = ~mult_div_complete;
+    wire [31:0] hi;
+    wire [31:0] lo;
+    mult_div mult_div(
+                 .clk(clk),
+                 .reset(reset),
+                 .is_mult(is_mult_EX),
+                 .is_multu(is_multu_EX),
+                 .is_div(is_div_EX),
+                 .is_divu(is_divu_EX),
+                 .hi_wen(hi_wen_EX),
+                 .lo_wen(lo_wen_EX),
+                 .rs_data(rs_data_EX),
+                 .rt_data(rt_data_EX),
+                 .hi(hi),
+                 .lo(lo),
+                 .complete(mult_div_complete)
+             );
+
+    mux_1h #(.num_port(3)) result_mux (
+               .select({is_result_alu_EX, is_result_lo_EX, is_result_hi_EX}),
+               .in(    {alu_result      , lo             , hi             }),
+               .out(result_EX)
+           );
+
 
     pipeline_reg #(.WIDTH(32 + 8 + 32 + 32)) EX_MEM_reg(
                      .clk(clk),
@@ -387,8 +462,8 @@ module mycpu_top(
                      .allow_in(ID_EX_reg_allow_out),
                      .valid_out(EX_MEM_reg_valid_out),
                      .allow_out(EX_MEM_reg_allow_out),
-                     .in({curr_pc_EX, reg_write_sig_EX, alu_result_EX, imm_EX}),
-                     .out({curr_pc_MEM, reg_write_sig_MEM, alu_result_MEM, imm_MEM}),
+                     .in({curr_pc_EX, reg_write_sig_EX, result_EX, imm_EX}),
+                     .out({curr_pc_MEM, reg_write_sig_MEM, result_MEM, imm_MEM}),
                      .valid(EX_MEM_reg_valid)
                  );
 
@@ -440,7 +515,7 @@ module mycpu_top(
 
     mux_1h #(.num_port(2)) reg_write_data_mux(
                .select({reg_write_is_alu_MEM, reg_write_is_mem_MEM}),
-               .in(    {alu_result_MEM      , data_sram_rdata_MEM }),
+               .in(    {result_MEM      , data_sram_rdata_MEM }),
                .out(reg_write_data_MEM)
            );
 
@@ -459,6 +534,13 @@ module mycpu_top(
 
                 .imm_is_sign_extend(imm_is_sign_extend),
 
+                .is_mult(is_mult_ID),
+                .is_multu(is_multu_ID),
+                .is_div(is_div_ID),
+                .is_divu(is_divu_ID),
+                .lo_wen(lo_wen_ID),
+                .hi_wen(hi_wen_ID),
+
                 .alu_op(alu_op_ID),
                 .alu_a_is_pc(alu_a_is_pc_ID),
                 .alu_a_is_rs_data(alu_a_is_rs_data_ID),
@@ -466,6 +548,10 @@ module mycpu_top(
                 .alu_b_is_rt_data(alu_b_is_rt_data_ID),
                 .alu_b_is_imm(alu_b_is_imm_ID),
                 .alu_b_is_8(alu_b_is_8_ID),
+
+                .is_result_alu(is_result_alu_ID),
+                .is_result_lo(is_result_lo_ID),
+                .is_result_hi(is_result_hi_ID),
 
                 .data_sram_en(data_sram_en),
                 .data_sram_wen(data_sram_wen_ID),

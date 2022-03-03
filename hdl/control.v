@@ -13,6 +13,13 @@ module control(
 
         output imm_is_sign_extend,
 
+        output is_mult,
+        output is_multu,
+        output is_div,
+        output is_divu,
+        output lo_wen,
+        output hi_wen,
+
         output [11:0] alu_op,
         output alu_a_is_pc,
         output alu_a_is_rs_data,
@@ -21,6 +28,10 @@ module control(
         output alu_b_is_rt_data,
         output alu_b_is_imm,
         output alu_b_is_8,
+
+        output is_result_alu,
+        output is_result_lo,
+        output is_result_hi,
 
         output data_sram_en,
         output [3:0] data_sram_wen,
@@ -95,8 +106,8 @@ module control(
            ~next_pc_is_branch_target & ~next_pc_is_jar_target & ~next_pc_is_jr_target;
 
     assign imm_arith =
-        is_addiu | is_addi | is_slti | is_sltiu | is_lui |
-        is_andi  | is_ori  | is_xori;
+           is_addiu | is_addi | is_slti | is_sltiu | is_lui |
+           is_andi  | is_ori  | is_xori;
 
     assign imm_is_sign_extend = ~(is_andi | is_ori | is_xori);
 
@@ -170,4 +181,16 @@ module control(
                 (is_R_type & func_nor)
             }} & `ALU_OP(`ALU_NOR)
            ;
+
+    assign is_result_hi = is_R_type & func_mfhi;
+    assign is_result_lo = is_R_type & func_mflo;
+    assign is_result_alu = ~is_result_lo & ~ is_result_hi;
+
+    assign is_mult = is_R_type & func_mult;
+    assign is_multu = is_R_type & func_multu;
+    assign is_div = is_R_type & func_div;
+    assign is_divu = is_R_type & func_divu;
+
+    assign lo_wen = is_R_type & func_mtlo;
+    assign hi_wen = is_R_type & func_mthi;
 endmodule

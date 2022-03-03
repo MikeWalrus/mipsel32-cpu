@@ -20,12 +20,12 @@ module div #
     wire [WIDTH-1:0] divisor_abs;
     wire dividend_sign;
     wire divisor_sign;
-    wire quotient_sign; 
+    wire quotient_sign;
     wire remainder_sign;
-    
+
     assign quotient_sign = dividend_sign ^ divisor_sign;
     assign remainder_sign = dividend_sign;
-    
+
     wire [WIDTH-1:0] quotient_signed = quotient_sign ? -quotient_u : quotient_u;
     wire [WIDTH-1:0] remainder_signed = remainder_sign ? -remainder_u : remainder_u;
 
@@ -33,15 +33,15 @@ module div #
     assign remainder = is_signed ? remainder_signed : remainder_u;
 
     signed_to_abs signed_to_abs_dividend(
-        .num(dividend),
-        .abs_value(dividend_abs),
-        .sign(dividend_sign)
-    );
+                      .num(dividend),
+                      .abs_value(dividend_abs),
+                      .sign(dividend_sign)
+                  );
     signed_to_abs signed_to_abs_divisor(
-        .num(divisor),
-        .abs_value(divisor_abs),
-        .sign(divisor_sign)
-    );
+                      .num(divisor),
+                      .abs_value(divisor_abs),
+                      .sign(divisor_sign)
+                  );
 
     wire [WIDTH-1:0] dividend_u;
     wire [WIDTH-1:0] divisor_u;
