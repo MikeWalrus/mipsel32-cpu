@@ -35,15 +35,17 @@ module alu(
     assign binvert = bnegate;
     assign cin = bnegate;
 
-    wire [31:0] sra_result = $signed(b) >>> a;
+    wire [4:0] shamt = a[4:0];
+
+    wire [31:0] sra_result = $signed(b) >>> shamt;
 
     assign result =
            ({32{is_add|is_sub}} & adder_out) |
            ({32{is_and}}        & (a & b)) |
            ({32{is_slt}}        & {{31{1'b0}}, adder_out[31] ^ signed_overflow}) |
            ({32{is_sltu}}       & {{31{1'b0}}, ~cout}) |
-           ({32{is_sll}}        & (b << a)) |
-           ({32{is_srl}}        & (b >> a)) |
+           ({32{is_sll}}        & (b << shamt)) |
+           ({32{is_srl}}        & (b >> shamt)) |
            ({32{is_sra}}        & sra_result) |
            ({32{is_lui}}        & {b[15:0],{16{1'b0}}}) |
            ({32{is_or}}         & (a | b)) |
