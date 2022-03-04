@@ -3,12 +3,14 @@ module control(
         input is_IF_ID_valid,
         input [5:0] opcode,
         input [5:0] func,
+        input [4:0] rt,
 
-        input is_eq,
+        input [31:0] rs_data,
+        input [31:0] rt_data,
 
         output next_pc_is_next,
         output next_pc_is_branch_target,
-        output next_pc_is_jar_target,
+        output next_pc_is_jal_target,
         output next_pc_is_jr_target,
 
         output imm_is_sign_extend,
@@ -53,10 +55,6 @@ module control(
     wire is_addi   = opcode == 6'b001000;
     wire is_addiu  = opcode == 6'b001001;
     wire is_andi   = opcode == 6'b001100;
-    wire is_beq    = opcode == 6'b000100;
-    wire is_blez   = opcode == 6'b000110;
-    wire is_bne    = opcode == 6'b000101;
-    wire is_bgtz   = opcode == 6'b000111;
     wire is_lb     = opcode == 6'b100000;
     wire is_lbu    = opcode == 6'b100100;
     wire is_lhu    = opcode == 6'b100101;
@@ -99,11 +97,9 @@ module control(
     wire func_sub   = func == 6'b100010;
     wire func_subu  = func == 6'b100011;
 
-    assign next_pc_is_branch_target = is_IF_ID_valid & ((is_beq & is_eq) | (is_bne & ~is_eq));
-    assign next_pc_is_jar_target    = is_IF_ID_valid & is_jal;
-    assign next_pc_is_jr_target     = is_IF_ID_valid & is_R_type & func_jr;
-    assign next_pc_is_next          =
-           ~next_pc_is_branch_target & ~next_pc_is_jar_target & ~next_pc_is_jr_target;
+    wire branch_link;
+    wire link = is_jal | branch_link | (is_R_type & func_jalr);
+    wire link_31 = is_jal | branch_link;
 
     assign imm_arith =
            is_addiu | is_addi | is_slti | is_sltiu | is_lui |
@@ -111,12 +107,9 @@ module control(
 
     assign imm_is_sign_extend = ~(is_andi | is_ori | is_xori);
 
-    assign reg_write =
-           (is_R_type)
-           | is_lw | is_jal
-           | imm_arith;
+    assign reg_write = (is_R_type) | is_lw | link | imm_arith;
     assign reg_write_addr_is_rd = is_R_type;
-    assign reg_write_addr_is_31 = is_jal;
+    assign reg_write_addr_is_31 = link_31;
     assign reg_write_addr_is_rt = ~reg_write_addr_is_31 & ~reg_write_addr_is_rd;
 
     assign reg_write_is_mem = is_lw;
@@ -124,25 +117,40 @@ module control(
 
     wire shift_const = is_R_type & (func_sll | func_srl | func_sra);
 
-    assign alu_a_is_pc      = is_jal;
+    assign alu_a_is_pc      = link;
     assign alu_a_is_shamt = shift_const;
     assign alu_a_is_rs_data = ~alu_a_is_pc & ~alu_a_is_shamt;
 
     assign alu_b_is_rt_data = is_R_type;
     assign alu_b_is_imm     =
-           is_sw | is_lw |
-           imm_arith;
-    assign alu_b_is_8       = is_jal;
+           is_sw | is_lw | imm_arith;
+    assign alu_b_is_8       = link;
 
     assign data_sram_en = 1;
 
     assign data_sram_wen_1_bit = is_sw;
 
+    assign next_pc_is_jal_target =
+           is_IF_ID_valid & (is_jal | is_j);
+    assign next_pc_is_jr_target =
+           is_IF_ID_valid & is_R_type & (func_jr | func_jalr);
+    assign next_pc_is_next =
+           ~next_pc_is_branch_target & ~next_pc_is_jal_target & ~next_pc_is_jr_target;
+
+    branch_ctrl branch_ctrl(
+                    .en(is_IF_ID_valid),
+                    .opcode(opcode),
+                    .rt(rt),
+                    .rs_data(rs_data),
+                    .rt_data(rt_data),
+                    .take(next_pc_is_branch_target),
+                    .link(branch_link)
+                );
 
     assign alu_op =
            {12{
-                (is_R_type & (func_add | func_addu))
-                | is_addiu | is_addi | is_lw | is_sw | is_jal
+                (is_R_type & (func_add | func_addu | func_jalr))
+                | is_addiu | is_addi | is_lw | is_sw | link
             }} & `ALU_OP(`ALU_ADD) |
            {12{
                 (is_R_type & (func_subu | func_sub))

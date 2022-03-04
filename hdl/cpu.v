@@ -37,17 +37,16 @@ module mycpu_top(
 
     wire next_pc_is_next;
     wire next_pc_is_branch_target;
-    wire next_pc_is_jar_target;
+    wire next_pc_is_jal_target;
     wire next_pc_is_jr_target;
 
     wire [31:0] rs_data_ID;
     wire [31:0] rt_data_ID;
-    wire is_eq = rs_data_ID == rt_data_ID;
 
 
     wire [31:0] jr_target = rs_data_ID;
     wire [31:0] branch_target;
-    wire [31:0] jar_target = {curr_pc_IF[31:28] ,instruction_ID[25:0], {2{1'b0}}};
+    wire [31:0] jal_target = {curr_pc_IF[31:28] ,instruction_ID[25:0], {2{1'b0}}};
 
     wire [5:0] opcode;
     wire [4:0] rs;
@@ -163,8 +162,8 @@ module mycpu_top(
     wire [31:0] next_pc_if_no_stall;
     assign next_pc = IF_ID_reg_allow_in ? next_pc_if_no_stall : curr_pc_IF;
     mux_1h #(.num_port(4)) next_pc_mux(
-               .select({next_pc_is_next , next_pc_is_branch_target, next_pc_is_jar_target, next_pc_is_jr_target}),
-               .in(    {curr_pc_IF+32'd4, branch_target           , jar_target           , jr_target           }),
+               .select({next_pc_is_next , next_pc_is_branch_target, next_pc_is_jal_target, next_pc_is_jr_target}),
+               .in(    {curr_pc_IF+32'd4, branch_target           , jal_target           , jr_target           }),
                .out(next_pc_if_no_stall)
            );
 
@@ -524,12 +523,14 @@ module mycpu_top(
                 .is_IF_ID_valid(IF_ID_reg_valid),
                 .opcode(opcode),
                 .func(func),
+                .rt(rt),
 
-                .is_eq(is_eq),
+                .rs_data(rs_data_ID),
+                .rt_data(rt_data_ID),
 
                 .next_pc_is_next(next_pc_is_next),
                 .next_pc_is_branch_target(next_pc_is_branch_target),
-                .next_pc_is_jar_target(next_pc_is_jar_target),
+                .next_pc_is_jal_target(next_pc_is_jal_target),
                 .next_pc_is_jr_target(next_pc_is_jr_target),
 
                 .imm_is_sign_extend(imm_is_sign_extend),
