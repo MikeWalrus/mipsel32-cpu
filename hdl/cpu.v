@@ -23,16 +23,51 @@ module mycpu_top(
     assign reset = ~resetn;
     assign inst_sram_en = 1;
 
+    // hack: delay one cycle
+    reg start;
+    always @(posedge clk) begin
+        if (reset)
+            start <= 0;
+        else
+            start <= 1;
+    end
+
     wire [3:0] data_sram_wen_ID;
     wire [3:0] data_sram_wen_EX;
 
-    wire [31:0] instruction_IF = inst_sram_rdata;
-    wire [31:0] instruction_ID;
-
-    wire [11:0] alu_op_ID;
-
+    // pc
     wire [31:0] curr_pc_IF;
     wire [31:0] curr_pc_ID;
+    wire [31:0] curr_pc_EX;
+    wire [31:0] curr_pc_MEM;
+    (*MARK_DEBUG = "true"*) wire [31:0] curr_pc_WB;
+
+
+    // instruction
+    wire [31:0] instruction_IF = inst_sram_rdata;
+    wire [31:0] instruction_ID;
+    wire [5:0] opcode;
+    wire [4:0] rs;
+    wire [4:0] rt;
+    wire [4:0] rd;
+    wire [15:0] inst_imm;
+    wire [4:0] shamt_ID;
+    wire [4:0] shamt_EX;
+    wire [5:0] func;
+
+    // imm
+    wire [31:0] imm_sign_extended;
+    wire imm_is_sign_extend;
+    wire [31:0] imm_ID;
+    wire [31:0] imm_EX;
+
+    // register read
+    wire [31:0] rs_data_ID;
+    wire [31:0] rt_data_ID;
+    wire [31:0] rs_data_EX;
+    wire [31:0] rt_data_EX;
+
+    // control transfer
     wire [31:0] next_pc;
 
     wire next_pc_is_next;
@@ -40,42 +75,29 @@ module mycpu_top(
     wire next_pc_is_jal_target;
     wire next_pc_is_jr_target;
 
-    wire [31:0] rs_data_ID;
-    wire [31:0] rt_data_ID;
+    wire [31:0] jr_target = rs_data_ID; // jr, jalr
+    wire [31:0] branch_target;          // b*
+    wire [31:0] jal_target =            // jal, j
+         {curr_pc_IF[31:28] ,instruction_ID[25:0], {2{1'b0}}};
 
-
-    wire [31:0] jr_target = rs_data_ID;
-    wire [31:0] branch_target;
-    wire [31:0] jal_target = {curr_pc_IF[31:28] ,instruction_ID[25:0], {2{1'b0}}};
-
-    wire [5:0] opcode;
-    wire [4:0] rs;
-    wire [4:0] rt;
-    wire [4:0] rd;
-    wire [4:0] shamt_ID;
-    wire [15:0] inst_imm;
-    wire [5:0] func;
-
-    wire [31:0] imm_ID;
-    wire [31:0] imm_EX;
-    wire [31:0] imm_MEM;
-
-    wire [31:0] rs_data_EX;
-    wire [31:0] rt_data_EX;
-
-    wire [31:0] curr_pc_EX;
-    wire [31:0] curr_pc_MEM;
-    (*MARK_DEBUG = "true"*) wire [31:0] curr_pc_WB;
-
-    wire [4:0]  shamt_EX;
-
-    wire [31:0] alu_a;
-    wire [31:0] alu_b;
-
+    // signals that choose the result
+    // from hi/lo or alu result
     wire [31:0] result_EX;
     wire [31:0] result_MEM;
+    wire is_result_alu_ID;
+    wire is_result_lo_ID;
+    wire is_result_hi_ID;
+    wire is_result_alu_EX;
+    wire is_result_lo_EX;
+    wire is_result_hi_EX;
 
+    // alu
+    wire [11:0] alu_op_ID;
     wire [11:0] alu_op_EX;
+
+    // alu src
+    wire [31:0] alu_a;
+    wire [31:0] alu_b;
 
     wire alu_a_is_rs_data_ID;
     wire alu_a_is_shamt_ID;
@@ -93,11 +115,75 @@ module mycpu_top(
     wire alu_b_is_imm_EX;
     wire alu_b_is_8_EX;
 
+    // alu control signals
+    // that go through pipeline registers
     wire [17:0] alu_ctrl_ID;
     wire [17:0] alu_ctrl_EX;
+    assign alu_ctrl_ID = {
+               alu_a_is_pc_ID,
+               alu_a_is_rs_data_ID,
+               alu_a_is_shamt_ID,
+               alu_b_is_8_ID,
+               alu_b_is_imm_ID,
+               alu_b_is_rt_data_ID,
+               alu_op_ID
+           };
+    assign {
+            alu_a_is_pc_EX,
+            alu_a_is_rs_data_EX,
+            alu_a_is_shamt_EX,
+            alu_b_is_8_EX,
+            alu_b_is_imm_EX,
+            alu_b_is_rt_data_EX,
+            alu_op_EX
+        } = alu_ctrl_EX;
 
-    wire [31:0] data_sram_rdata_MEM = data_sram_rdata;
+    // multiplication and division
+    wire is_div_ID;
+    wire is_divu_ID;
+    wire is_mult_ID;
+    wire is_multu_ID;
+    wire hi_wen_ID;
+    wire lo_wen_ID;
 
+    wire is_div_EX;
+    wire is_divu_EX;
+    wire is_mult_EX;
+    wire is_multu_EX;
+    wire hi_wen_EX;
+    wire lo_wen_EX;
+
+    // multiplication and division control signals
+    // that go through pipeline registers
+    wire [8:0] mult_div_ctrl_ID;
+    wire [8:0] mult_div_ctrl_EX;
+    assign mult_div_ctrl_ID = {
+               is_div_ID,
+               is_divu_ID,
+               is_mult_ID,
+               is_multu_ID,
+               hi_wen_ID,
+               lo_wen_ID,
+               is_result_lo_ID,
+               is_result_hi_ID,
+               is_result_alu_ID
+           };
+    assign {
+            is_div_EX,
+            is_divu_EX,
+            is_mult_EX,
+            is_multu_EX,
+            hi_wen_EX,
+            lo_wen_EX,
+            is_result_lo_EX,
+            is_result_hi_EX,
+            is_result_alu_EX
+        } = mult_div_ctrl_EX;
+
+    // data memory read result
+    wire [31:0] data_sram_rdata_MEM;
+
+    // register write
     wire reg_write_ID;
     wire reg_write_addr_is_rt_ID;
     wire reg_write_addr_is_rd_ID;
@@ -108,7 +194,7 @@ module mycpu_top(
 
     wire reg_write_EX;
     wire reg_write_is_alu_EX;
-    wire reg_write_is_mem_EX;
+    wire reg_write_is_mem_EX; // for load-use hazard detection
     wire [4:0] reg_write_addr_EX;
 
     wire reg_write_MEM;
@@ -119,15 +205,42 @@ module mycpu_top(
     wire reg_write_WB;
     wire [4:0] reg_write_addr_WB;
 
+    wire [31:0] reg_write_data_MEM;
+    wire [31:0] reg_write_data_WB;
+
+
+    // register write signals
+    // that go through pipeline registers
     wire [7:0] reg_write_sig_ID;
     wire [7:0] reg_write_sig_EX;
     wire [7:0] reg_write_sig_MEM;
     wire [37:0] reg_write_sig_WB;
 
-    wire [31:0] reg_write_data_MEM;
-    wire [31:0] reg_write_data_WB;
+    assign reg_write_sig_ID = {
+               reg_write_ID,
+               reg_write_addr_ID,
+               reg_write_is_alu_ID,
+               reg_write_is_mem_ID
+           };
+    assign {
+            reg_write_EX,
+            reg_write_addr_EX,
+            reg_write_is_alu_EX,
+            reg_write_is_mem_EX
+        } = reg_write_sig_EX;
+    assign {
+            reg_write_MEM,
+            reg_write_addr_MEM,
+            reg_write_is_alu_MEM,
+            reg_write_is_mem_MEM
+        } = reg_write_sig_MEM;
+    assign {
+            reg_write_WB,
+            reg_write_addr_WB,
+            reg_write_data_WB
+        } = reg_write_sig_WB;
 
-    // pipeline registers
+    // pipeline registers control signals
     wire IF_ID_reg_valid_out;
     wire IF_ID_reg_allow_out;
     wire IF_ID_reg_stall;
@@ -152,36 +265,7 @@ module mycpu_top(
     wire MEM_WB_reg_stall = 0;
     wire MEM_WB_reg_valid;
 
-    pc pc(
-           .clk(clk),
-           .reset(reset),
-           .next(next_pc),
-           .out(curr_pc_IF)
-       );
-
-    wire [31:0] next_pc_if_no_stall;
-    assign next_pc = IF_ID_reg_allow_in ? next_pc_if_no_stall : curr_pc_IF;
-    mux_1h #(.num_port(4)) next_pc_mux(
-               .select({next_pc_is_next , next_pc_is_branch_target, next_pc_is_jal_target, next_pc_is_jr_target}),
-               .in(    {curr_pc_IF+32'd4, branch_target           , jal_target           , jr_target           }),
-               .out(next_pc_if_no_stall)
-           );
-
-
-    addr_trans addr_trans_inst(
-                   .virt_addr(next_pc),
-                   .phy_addr(inst_sram_addr)
-               );
-
-
-    reg start;
-    always @(posedge clk) begin
-        if (reset)
-            start <= 0;
-        else
-            start <= 1;
-    end
-
+    // pipeline registers
     pipeline_reg #(.WIDTH(32 + 32)) IF_ID_reg(
                      .clk(clk),
                      .reset(reset),
@@ -195,6 +279,106 @@ module mycpu_top(
                      .valid(IF_ID_reg_valid)
                  );
 
+    pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 + 18 + 8 + 4 + 5 + 9)) ID_EX_reg(
+                     .clk(clk),
+                     .reset(reset),
+                     .stall(ID_EX_reg_stall),
+                     .valid_in(ID_EX_reg_valid_in),
+                     .allow_in(IF_ID_reg_allow_out),
+                     .valid_out(ID_EX_reg_valid_out),
+                     .allow_out(ID_EX_reg_allow_out),
+                     .in(
+                         {
+                             curr_pc_ID, rs_data_ID, rt_data_ID, imm_ID,
+                             alu_ctrl_ID, reg_write_sig_ID, data_sram_wen_ID,
+                             shamt_ID, mult_div_ctrl_ID
+                         }),
+                     .out(
+                         {
+                             curr_pc_EX, rs_data_EX, rt_data_EX, imm_EX,
+                             alu_ctrl_EX, reg_write_sig_EX, data_sram_wen_EX,
+                             shamt_EX, mult_div_ctrl_EX
+                         }),
+                     .valid(ID_EX_reg_valid)
+                 );
+
+    pipeline_reg #(.WIDTH(32 + 8 + 32)) EX_MEM_reg(
+                     .clk(clk),
+                     .reset(reset),
+                     .stall(EX_MEM_reg_stall),
+                     .valid_in(EX_MEM_reg_valid_in),
+                     .allow_in(ID_EX_reg_allow_out),
+                     .valid_out(EX_MEM_reg_valid_out),
+                     .allow_out(EX_MEM_reg_allow_out),
+                     .in({curr_pc_EX, reg_write_sig_EX, result_EX}),
+                     .out({curr_pc_MEM, reg_write_sig_MEM, result_MEM}),
+                     .valid(EX_MEM_reg_valid)
+                 );
+
+    pipeline_reg #(.WIDTH(32 + 38)) MEM_WB_reg(
+                     .clk(clk),
+                     .reset(reset),
+                     .stall(MEM_WB_reg_stall),
+                     .valid_in(MEM_WB_reg_valid_in),
+                     .allow_in(EX_MEM_reg_allow_out),
+                     .valid_out(MEM_WB_reg_valid_out),
+                     .allow_out(MEM_WB_reg_allow_out),
+                     .in({
+                             curr_pc_MEM,
+                             reg_write_MEM,
+                             reg_write_addr_MEM,
+                             reg_write_data_MEM
+                         }),
+                     .out(
+                         {
+                             curr_pc_WB,
+                             reg_write_sig_WB
+                         }),
+                     .valid(MEM_WB_reg_valid)
+                 );
+
+
+    //
+    // IF Stage
+    //
+
+    pc pc(
+           .clk(clk),
+           .reset(reset),
+           .next(next_pc),
+           .out(curr_pc_IF)
+       );
+
+    wire [31:0] next_pc_if_no_stall;
+    assign next_pc = IF_ID_reg_allow_in ? next_pc_if_no_stall : curr_pc_IF;
+    mux_1h #(.num_port(4)) next_pc_mux(
+               .select(
+                   {
+                       next_pc_is_next,
+                       next_pc_is_branch_target,
+                       next_pc_is_jal_target,
+                       next_pc_is_jr_target
+                   }),
+               .in(
+                   {
+                       curr_pc_IF+32'd4,
+                       branch_target,
+                       jal_target,
+                       jr_target
+                   }),
+               .out(next_pc_if_no_stall)
+           );
+
+
+    addr_trans addr_trans_inst(
+                   .virt_addr(next_pc),
+                   .phy_addr(inst_sram_addr)
+               );
+
+
+    //
+    // ID Stage
+    //
 
     assign opcode   = instruction_ID[31:26];
     assign rs       = instruction_ID[25:21];
@@ -203,6 +387,52 @@ module mycpu_top(
     assign shamt_ID = instruction_ID[10:6];
     assign inst_imm = instruction_ID[15:0];
     assign func     = instruction_ID[5:0];
+
+    control control(
+                .is_IF_ID_valid(IF_ID_reg_valid),
+                .opcode(opcode),
+                .func(func),
+                .rt(rt),
+
+                .rs_data(rs_data_ID),
+                .rt_data(rt_data_ID),
+
+                .next_pc_is_next(next_pc_is_next),
+                .next_pc_is_branch_target(next_pc_is_branch_target),
+                .next_pc_is_jal_target(next_pc_is_jal_target),
+                .next_pc_is_jr_target(next_pc_is_jr_target),
+
+                .imm_is_sign_extend(imm_is_sign_extend),
+
+                .is_mult(is_mult_ID),
+                .is_multu(is_multu_ID),
+                .is_div(is_div_ID),
+                .is_divu(is_divu_ID),
+                .lo_wen(lo_wen_ID),
+                .hi_wen(hi_wen_ID),
+
+                .alu_op(alu_op_ID),
+                .alu_a_is_pc(alu_a_is_pc_ID),
+                .alu_a_is_rs_data(alu_a_is_rs_data_ID),
+                .alu_a_is_shamt(alu_a_is_shamt_ID),
+                .alu_b_is_rt_data(alu_b_is_rt_data_ID),
+                .alu_b_is_imm(alu_b_is_imm_ID),
+                .alu_b_is_8(alu_b_is_8_ID),
+
+                .is_result_alu(is_result_alu_ID),
+                .is_result_lo(is_result_lo_ID),
+                .is_result_hi(is_result_hi_ID),
+
+                .data_sram_en(data_sram_en),
+                .data_sram_wen(data_sram_wen_ID),
+
+                .reg_write(reg_write_ID),
+                .reg_write_addr_is_rd(reg_write_addr_is_rd_ID),
+                .reg_write_addr_is_rt(reg_write_addr_is_rt_ID),
+                .reg_write_addr_is_31(reg_write_addr_is_31_ID),
+                .reg_write_is_alu(reg_write_is_alu_ID),
+                .reg_write_is_mem(reg_write_is_mem_ID)
+            );
 
     wire [31:0] rs_data_ID_no_forward;
     wire [31:0] rt_data_ID_no_forward;
@@ -217,8 +447,6 @@ module mycpu_top(
                 .w_data(reg_write_data_WB)
             );
 
-    wire [31:0] imm_sign_extended;
-    wire imm_is_sign_extend;
     assign imm_ID = imm_is_sign_extend ? imm_sign_extended : {16'b0,inst_imm};
 
     imm_gen imm_gen(
@@ -312,20 +540,10 @@ module mycpu_top(
                       .IF_ID_reg_stall(IF_ID_reg_stall)
                   );
 
-    pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 + 18 + 8 + 4 + 5 + 9)) ID_EX_reg(
-                     .clk(clk),
-                     .reset(reset),
-                     .stall(ID_EX_reg_stall),
-                     .valid_in(ID_EX_reg_valid_in),
-                     .allow_in(IF_ID_reg_allow_out),
-                     .valid_out(ID_EX_reg_valid_out),
-                     .allow_out(ID_EX_reg_allow_out),
-                     .in({curr_pc_ID, rs_data_ID, rt_data_ID, imm_ID, alu_ctrl_ID,
-                          reg_write_sig_ID, data_sram_wen_ID, shamt_ID, mult_div_ctrl_ID}),
-                     .out({curr_pc_EX, rs_data_EX, rt_data_EX, imm_EX, alu_ctrl_EX,
-                           reg_write_sig_EX, data_sram_wen_EX, shamt_EX, mult_div_ctrl_EX}),
-                     .valid(ID_EX_reg_valid)
-                 );
+
+    //
+    // EX Stage
+    //
 
     assign data_sram_wdata = rt_data_EX;
 
@@ -344,28 +562,19 @@ module mycpu_top(
             .result(alu_result)
         );
 
-    assign alu_ctrl_ID = {
-               alu_a_is_pc_ID,
-               alu_a_is_rs_data_ID,
-               alu_a_is_shamt_ID,
-               alu_b_is_8_ID,
-               alu_b_is_imm_ID,
-               alu_b_is_rt_data_ID,
-               alu_op_ID
-           };
-    assign {
-            alu_a_is_pc_EX,
-            alu_a_is_rs_data_EX,
-            alu_a_is_shamt_EX,
-            alu_b_is_8_EX,
-            alu_b_is_imm_EX,
-            alu_b_is_rt_data_EX,
-            alu_op_EX
-        } = alu_ctrl_EX;
-
     mux_1h #(.num_port(3)) alu_a_mux(
-               .select({alu_a_is_rs_data_EX, alu_a_is_shamt_EX            , alu_a_is_pc_EX}),
-               .in(    {rs_data_EX         , {{27{1'b0}}, {shamt_EX[4:0]}}, curr_pc_EX }),
+               .select(
+                   {
+                       alu_a_is_rs_data_EX,
+                       alu_a_is_shamt_EX,
+                       alu_a_is_pc_EX
+                   }),
+               .in({
+                       rs_data_EX,
+                       {{27{1'b0}},
+                        {shamt_EX[4:0]}},
+                       curr_pc_EX
+                   }),
                .out(alu_a)
            );
     mux_1h #(.num_port(3)) alu_b_mux(
@@ -380,51 +589,7 @@ module mycpu_top(
                    .phy_addr(data_sram_addr)
                );
 
-    wire is_result_alu_ID;
-    wire is_result_lo_ID;
-    wire is_result_hi_ID;
-    wire is_result_alu_EX;
-    wire is_result_lo_EX;
-    wire is_result_hi_EX;
 
-    wire is_div_ID;
-    wire is_divu_ID;
-    wire is_mult_ID;
-    wire is_multu_ID;
-    wire hi_wen_ID;
-    wire lo_wen_ID;
-
-    wire is_div_EX;
-    wire is_divu_EX;
-    wire is_mult_EX;
-    wire is_multu_EX;
-    wire hi_wen_EX;
-    wire lo_wen_EX;
-
-    wire [8:0] mult_div_ctrl_ID;
-    wire [8:0] mult_div_ctrl_EX;
-    assign mult_div_ctrl_ID = {
-               is_div_ID,
-               is_divu_ID,
-               is_mult_ID,
-               is_multu_ID,
-               hi_wen_ID,
-               lo_wen_ID,
-               is_result_lo_ID,
-               is_result_hi_ID,
-               is_result_alu_ID
-           };
-    assign {
-            is_div_EX,
-            is_divu_EX,
-            is_mult_EX,
-            is_multu_EX,
-            hi_wen_EX,
-            lo_wen_EX,
-            is_result_lo_EX,
-            is_result_hi_EX,
-            is_result_alu_EX
-        } = mult_div_ctrl_EX;
 
     wire mult_div_complete;
     assign ID_EX_reg_stall = ~mult_div_complete;
@@ -453,62 +618,31 @@ module mycpu_top(
            );
 
 
-    pipeline_reg #(.WIDTH(32 + 8 + 32 + 32)) EX_MEM_reg(
-                     .clk(clk),
-                     .reset(reset),
-                     .stall(EX_MEM_reg_stall),
-                     .valid_in(EX_MEM_reg_valid_in),
-                     .allow_in(ID_EX_reg_allow_out),
-                     .valid_out(EX_MEM_reg_valid_out),
-                     .allow_out(EX_MEM_reg_allow_out),
-                     .in({curr_pc_EX, reg_write_sig_EX, result_EX, imm_EX}),
-                     .out({curr_pc_MEM, reg_write_sig_MEM, result_MEM, imm_MEM}),
-                     .valid(EX_MEM_reg_valid)
-                 );
+    //
+    // MEM Stage
+    //
+
+    assign data_sram_rdata_MEM = data_sram_rdata;
 
 
-    pipeline_reg #(.WIDTH(32 + 38)) MEM_WB_reg(
-                     .clk(clk),
-                     .reset(reset),
-                     .stall(MEM_WB_reg_stall),
-                     .valid_in(MEM_WB_reg_valid_in),
-                     .allow_in(EX_MEM_reg_allow_out),
-                     .valid_out(MEM_WB_reg_valid_out),
-                     .allow_out(MEM_WB_reg_allow_out),
-                     .in({curr_pc_MEM, reg_write_MEM, reg_write_addr_MEM, reg_write_data_MEM}),
-                     .out({curr_pc_WB, reg_write_sig_WB}),
-                     .valid(MEM_WB_reg_valid)
-                 );
-
-
-    assign reg_write_sig_ID = {
-               reg_write_ID,
-               reg_write_addr_ID,
-               reg_write_is_alu_ID,
-               reg_write_is_mem_ID
-           };
-    assign {
-            reg_write_EX,
-            reg_write_addr_EX,
-            reg_write_is_alu_EX,
-            reg_write_is_mem_EX
-        } = reg_write_sig_EX;
-    assign {
-            reg_write_MEM,
-            reg_write_addr_MEM,
-            reg_write_is_alu_MEM,
-            reg_write_is_mem_MEM
-        } = reg_write_sig_MEM;
-    assign {
-            reg_write_WB,
-            reg_write_addr_WB,
-            reg_write_data_WB
-        } = reg_write_sig_WB;
-
+    //
+    // WB Stage
+    //
 
     mux_1h #(.num_port(3), .data_width(5)) reg_write_addr_mux(
-               .select({reg_write_addr_is_rd_ID, reg_write_addr_is_rt_ID, reg_write_addr_is_31_ID}),
-               .in(    {rd                     , rt                     , 5'd31                  }),
+               .select(
+                   {
+                       reg_write_addr_is_rd_ID,
+                       reg_write_addr_is_rt_ID,
+                       reg_write_addr_is_31_ID
+                   }),
+               .in(
+                   {
+                       rd,
+                       rt,
+                       5'd31
+                   }
+               ),
                .out(reg_write_addr_ID)
            );
 
@@ -517,53 +651,6 @@ module mycpu_top(
                .in(    {result_MEM      , data_sram_rdata_MEM }),
                .out(reg_write_data_MEM)
            );
-
-
-    control control(
-                .is_IF_ID_valid(IF_ID_reg_valid),
-                .opcode(opcode),
-                .func(func),
-                .rt(rt),
-
-                .rs_data(rs_data_ID),
-                .rt_data(rt_data_ID),
-
-                .next_pc_is_next(next_pc_is_next),
-                .next_pc_is_branch_target(next_pc_is_branch_target),
-                .next_pc_is_jal_target(next_pc_is_jal_target),
-                .next_pc_is_jr_target(next_pc_is_jr_target),
-
-                .imm_is_sign_extend(imm_is_sign_extend),
-
-                .is_mult(is_mult_ID),
-                .is_multu(is_multu_ID),
-                .is_div(is_div_ID),
-                .is_divu(is_divu_ID),
-                .lo_wen(lo_wen_ID),
-                .hi_wen(hi_wen_ID),
-
-                .alu_op(alu_op_ID),
-                .alu_a_is_pc(alu_a_is_pc_ID),
-                .alu_a_is_rs_data(alu_a_is_rs_data_ID),
-                .alu_a_is_shamt(alu_a_is_shamt_ID),
-                .alu_b_is_rt_data(alu_b_is_rt_data_ID),
-                .alu_b_is_imm(alu_b_is_imm_ID),
-                .alu_b_is_8(alu_b_is_8_ID),
-
-                .is_result_alu(is_result_alu_ID),
-                .is_result_lo(is_result_lo_ID),
-                .is_result_hi(is_result_hi_ID),
-
-                .data_sram_en(data_sram_en),
-                .data_sram_wen(data_sram_wen_ID),
-
-                .reg_write(reg_write_ID),
-                .reg_write_addr_is_rd(reg_write_addr_is_rd_ID),
-                .reg_write_addr_is_rt(reg_write_addr_is_rt_ID),
-                .reg_write_addr_is_31(reg_write_addr_is_31_ID),
-                .reg_write_is_alu(reg_write_is_alu_ID),
-                .reg_write_is_mem(reg_write_is_mem_ID)
-            );
 
     assign debug_wb_pc = curr_pc_WB;
     assign debug_wb_rf_wen = {4{reg_write_WB & MEM_WB_reg_valid}};
