@@ -61,6 +61,8 @@ module control(
     wire is_addi   = opcode == 6'b001000;
     wire is_addiu  = opcode == 6'b001001;
     wire is_andi   = opcode == 6'b001100;
+    wire is_j      = opcode == 6'b000010;
+    wire is_jal    = opcode == 6'b000011;
     wire is_lb     = opcode == 6'b100000;
     wire is_lbu    = opcode == 6'b100100;
     wire is_lh     = opcode == 6'b100001;
@@ -68,14 +70,12 @@ module control(
     wire is_lui    = opcode == 6'b001111;
     wire is_lw     = opcode == 6'b100011;
     wire is_ori    = opcode == 6'b001101;
-    wire is_xori   = opcode == 6'b001110;
     wire is_sb     = opcode == 6'b101000;
     wire is_sh     = opcode == 6'b101001;
     wire is_slti   = opcode == 6'b001010;
     wire is_sltiu  = opcode == 6'b001011;
     wire is_sw     = opcode == 6'b101011;
-    wire is_j      = opcode == 6'b000010;
-    wire is_jal    = opcode == 6'b000011;
+    wire is_xori   = opcode == 6'b001110;
 
     wire func_add   = func == 6'b100000;
     wire func_addu  = func == 6'b100001;
@@ -85,24 +85,24 @@ module control(
     wire func_jalr  = func == 6'b001001;
     wire func_jr    = func == 6'b001000;
     wire func_mfhi  = func == 6'b010000;
-    wire func_mthi  = func == 6'b010001;
     wire func_mflo  = func == 6'b010010;
+    wire func_mthi  = func == 6'b010001;
     wire func_mtlo  = func == 6'b010011;
     wire func_mult  = func == 6'b011000;
     wire func_multu = func == 6'b011001;
     wire func_nor   = func == 6'b100111;
-    wire func_xor   = func == 6'b100110;
     wire func_or    = func == 6'b100101;
-    wire func_slt   = func == 6'b101010;
-    wire func_sltu  = func == 6'b101011;
     wire func_sll   = func == 6'b000000;
     wire func_sllv  = func == 6'b000100;
-    wire func_srl   = func == 6'b000010;
-    wire func_srlv  = func == 6'b000110;
+    wire func_slt   = func == 6'b101010;
+    wire func_sltu  = func == 6'b101011;
     wire func_sra   = func == 6'b000011;
     wire func_srav  = func == 6'b000111;
+    wire func_srl   = func == 6'b000010;
+    wire func_srlv  = func == 6'b000110;
     wire func_sub   = func == 6'b100010;
     wire func_subu  = func == 6'b100011;
+    wire func_xor   = func == 6'b100110;
 
     wire is_load = |{is_lw, is_lb, is_lbu, is_lh, is_lhu};
 
