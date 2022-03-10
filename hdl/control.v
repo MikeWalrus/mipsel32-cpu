@@ -35,6 +35,12 @@ module control(
         output is_result_lo,
         output is_result_hi,
 
+        output read_w,
+        output read_b,
+        output read_h,
+        output read_bu,
+        output read_hu,
+
         output data_sram_en,
         output [3:0] data_sram_wen,
 
@@ -57,6 +63,7 @@ module control(
     wire is_andi   = opcode == 6'b001100;
     wire is_lb     = opcode == 6'b100000;
     wire is_lbu    = opcode == 6'b100100;
+    wire is_lh     = opcode == 6'b100001;
     wire is_lhu    = opcode == 6'b100101;
     wire is_lui    = opcode == 6'b001111;
     wire is_lw     = opcode == 6'b100011;
@@ -97,6 +104,8 @@ module control(
     wire func_sub   = func == 6'b100010;
     wire func_subu  = func == 6'b100011;
 
+    wire is_load = |{is_lw, is_lb, is_lbu, is_lh, is_lhu};
+
     wire branch_link;
     wire link = is_jal | branch_link | (is_R_type & func_jalr);
     wire link_31 = is_jal | branch_link;
@@ -107,12 +116,12 @@ module control(
 
     assign imm_is_sign_extend = ~(is_andi | is_ori | is_xori);
 
-    assign reg_write = (is_R_type) | is_lw | link | imm_arith;
+    assign reg_write = (is_R_type) | is_load | link | imm_arith;
     assign reg_write_addr_is_rd = is_R_type;
     assign reg_write_addr_is_31 = link_31;
     assign reg_write_addr_is_rt = ~reg_write_addr_is_31 & ~reg_write_addr_is_rd;
 
-    assign reg_write_is_mem = is_lw;
+    assign reg_write_is_mem = is_load;
     assign reg_write_is_alu = ~reg_write_is_mem;
 
     wire shift_const = is_R_type & (func_sll | func_srl | func_sra);
@@ -123,7 +132,7 @@ module control(
 
     assign alu_b_is_rt_data = is_R_type;
     assign alu_b_is_imm     =
-           is_sw | is_lw | imm_arith;
+           is_sw | is_load | imm_arith;
     assign alu_b_is_8       = link;
 
     assign data_sram_en = 1;
@@ -150,7 +159,7 @@ module control(
     assign alu_op =
            {12{
                 (is_R_type & (func_add | func_addu | func_jalr))
-                | is_addiu | is_addi | is_lw | is_sw | link
+                | is_addiu | is_addi | is_load | is_sw | link
             }} & `ALU_OP(`ALU_ADD) |
            {12{
                 (is_R_type & (func_subu | func_sub))
@@ -201,4 +210,10 @@ module control(
 
     assign lo_wen = is_R_type & func_mtlo;
     assign hi_wen = is_R_type & func_mthi;
+
+    assign read_w = is_lw;
+    assign read_b = is_lb;
+    assign read_h = is_lh;
+    assign read_bu = is_lbu;
+    assign read_hu = is_lhu;
 endmodule
