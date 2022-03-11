@@ -14,12 +14,12 @@ module mem_read(
     wire [7:0] bytes [3:0];
     genvar i;
     for (i = 0; i < 4; i = i + 1) begin
-        assign bytes[i] = data_sram_rdata[i*8+7:i*8];
+        assign bytes[i] = data_sram_rdata[i*8 +: 8];
     end
 
     wire [15:0] halfwords [1:0];
     for (i = 0; i < 2; i = i + 1) begin
-        assign halfwords[i] = data_sram_rdata[i*16+15:i*16];
+        assign halfwords[i] = data_sram_rdata[i*16 +: 16];
     end
 
     wire [7:0] b = bytes[byte_offset];

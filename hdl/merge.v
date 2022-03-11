@@ -13,12 +13,12 @@ module merge #
         wire [31:0] merged;
         if (left) begin
             localparam len = i * 8 + 8;
-            assign merged[31:32-len] = mem_word[len-1:0];
+            assign merged[31 -: len] = mem_word[0 +: len];
             if (31 - len >= 0)
                 assign merged[31-len:0] = reg_word[31-len:0];
         end else begin
             localparam len = 32 - i * 8;
-            assign merged[len-1:0] = mem_word[31:32-len];
+            assign merged[0 +: len] = mem_word[31 -: len];
             if (len < 32)
                 assign merged[31:len] = reg_word[31:len];
         end

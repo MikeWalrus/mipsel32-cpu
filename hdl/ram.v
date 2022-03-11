@@ -19,7 +19,7 @@ module ram #
     for (i = 0; i < num_bytes; i = i + 1) begin
         always @(posedge clk) begin
             if (we[i])
-                ram_[addr][i*8+7:i*8] <= din[i*8+7:i*8];
+                ram_[addr][i*8 +: 8] <= din[i*8 +: 8];
         end
     end
     always @(posedge clk) begin
