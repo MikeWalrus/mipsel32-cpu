@@ -40,10 +40,8 @@ module control(
         output mem_h,
         output mem_bu,
         output mem_hu,
-
-        output mem_result_is_lwl,
-        output mem_result_is_lwr,
-        output mem_result_is_not_merged,
+        output mem_wl,
+        output mem_wr,
 
         output data_sram_en,
         output mem_wen,
@@ -77,6 +75,8 @@ module control(
     wire is_slti   = opcode == 6'b001010;
     wire is_sltiu  = opcode == 6'b001011;
     wire is_sw     = opcode == 6'b101011;
+    wire is_swl    = opcode == 6'b101010;
+    wire is_swr    = opcode == 6'b101110;
     wire is_xori   = opcode == 6'b001110;
 
     wire func_add   = func == 6'b100000;
@@ -107,7 +107,7 @@ module control(
     wire func_xor   = func == 6'b100110;
 
     wire is_load = |{is_lw, is_lb, is_lbu, is_lh, is_lhu, is_lwl, is_lwr};
-    wire is_store = |{is_sw, is_sb, is_sh};
+    wire is_store = |{is_sw, is_sb, is_sh, is_swl, is_swr};
 
     wire branch_link;
     wire link = is_jal | branch_link | (is_R_type & func_jalr);
@@ -217,11 +217,8 @@ module control(
     assign mem_h = |{is_lh, is_sh};
     assign mem_bu = is_lbu;
     assign mem_hu = is_lhu;
-
-    assign mem_result_is_lwl = is_lwl;
-    assign mem_result_is_lwr = is_lwr;
-    assign mem_result_is_not_merged =
-           ~mem_result_is_lwl & ~mem_result_is_lwr;
+    assign mem_wl = is_swl | is_lwl;
+    assign mem_wr = is_swr | is_lwr;
 
     assign mem_wen = is_store;
 endmodule

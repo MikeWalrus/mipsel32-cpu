@@ -192,56 +192,54 @@ module mycpu_top(
     wire mem_bu_ID;
     wire mem_h_ID;
     wire mem_hu_ID;
+    wire mem_wl_ID;
+    wire mem_wr_ID;
 
     wire mem_w_EX;
     wire mem_b_EX;
     wire mem_bu_EX;
     wire mem_h_EX;
     wire mem_hu_EX;
+    wire mem_wl_EX;
+    wire mem_wr_EX;
 
     wire mem_w_MEM;
     wire mem_b_MEM;
     wire mem_bu_MEM;
     wire mem_h_MEM;
     wire mem_hu_MEM;
+    wire mem_wl_MEM;
+    wire mem_wr_MEM;
 
-    wire mem_result_is_lwl_ID;
-    wire mem_result_is_lwr_ID;
-    wire mem_result_is_not_merged_ID;
-
-    wire mem_result_is_lwl_MEM;
-    wire mem_result_is_lwr_MEM;
-    wire mem_result_is_not_merged_MEM;
-
-    wire [7:0] mem_ctrl_ID;
-    wire [7:0] mem_ctrl_EX;
-    wire [7:0] mem_ctrl_MEM;
+    wire [6:0] mem_ctrl_ID;
+    wire [6:0] mem_ctrl_EX;
+    wire [6:0] mem_ctrl_MEM;
     assign mem_ctrl_ID = {
                mem_w_ID,
                mem_b_ID,
                mem_bu_ID,
                mem_h_ID,
                mem_hu_ID,
-               mem_result_is_lwl_ID,
-               mem_result_is_lwr_ID,
-               mem_result_is_not_merged_ID
+               mem_wl_ID,
+               mem_wr_ID
            };
     assign {
             mem_w_EX,
             mem_b_EX,
             mem_bu_EX,
             mem_h_EX,
-            mem_hu_EX
-        } = mem_ctrl_EX[7:3];
+            mem_hu_EX,
+            mem_wl_EX,
+            mem_wr_EX
+        } = mem_ctrl_EX;
     assign {
             mem_w_MEM,
             mem_b_MEM,
             mem_bu_MEM,
             mem_h_MEM,
             mem_hu_MEM,
-            mem_result_is_lwl_MEM,
-            mem_result_is_lwr_MEM,
-            mem_result_is_not_merged_MEM
+            mem_wl_MEM,
+            mem_wr_MEM
         } = mem_ctrl_MEM;
 
 
@@ -341,7 +339,10 @@ module mycpu_top(
                      .valid(IF_ID_reg_valid)
                  );
 
-    pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 + 18 + 8 + 1 + 5 + 9 + 8)) ID_EX_reg(
+    pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 +
+                          18 + 8 + 1 +
+                          5 + 9 + 7))
+                 ID_EX_reg(
                      .clk(clk),
                      .reset(reset),
                      .stall(ID_EX_reg_stall),
@@ -364,7 +365,7 @@ module mycpu_top(
                      .valid(ID_EX_reg_valid)
                  );
 
-    pipeline_reg #(.WIDTH(32 + 8 + 32 + 2 + 8 + 32)) EX_MEM_reg(
+    pipeline_reg #(.WIDTH(32 + 8 + 32 + 2 + 7 + 32)) EX_MEM_reg(
                      .clk(clk),
                      .reset(reset),
                      .stall(EX_MEM_reg_stall),
@@ -500,10 +501,8 @@ module mycpu_top(
                 .mem_w(mem_w_ID),
                 .mem_bu(mem_bu_ID),
                 .mem_hu(mem_hu_ID),
-
-                .mem_result_is_lwl(mem_result_is_lwl_ID),
-                .mem_result_is_lwr(mem_result_is_lwr_ID),
-                .mem_result_is_not_merged(mem_result_is_not_merged_ID),
+                .mem_wl(mem_wl_ID),
+                .mem_wr(mem_wr_ID),
 
                 .data_sram_en(data_sram_en),
                 .mem_wen(mem_wen_ID),
@@ -701,6 +700,8 @@ module mycpu_top(
                     .write_b(mem_b_EX),
                     .write_h(mem_h_EX),
                     .write_w(mem_w_EX),
+                    .swl(mem_wl_EX),
+                    .swr(mem_wr_EX),
                     .wen_4b(data_sram_wen)
                 );
 
@@ -709,6 +710,9 @@ module mycpu_top(
                            .write_b(mem_b_EX),
                            .write_h(mem_h_EX),
                            .write_w(mem_w_EX),
+                           .swl(mem_wl_EX),
+                           .swr(mem_wr_EX),
+                           .byte_offset(byte_offset_EX),
                            .mem_write_data(data_sram_wdata)
                        );
 
@@ -748,9 +752,9 @@ module mycpu_top(
     mux_1h #(.num_port(3)) mem_result_mux(
                .select(
                    {
-                       mem_result_is_lwl_MEM,
-                       mem_result_is_lwr_MEM,
-                       mem_result_is_not_merged_MEM
+                       mem_wl_MEM,
+                       mem_wr_MEM,
+                       ~mem_wl_MEM & ~mem_wr_MEM
                    }),
                .in(
                    {
