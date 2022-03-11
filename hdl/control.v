@@ -35,18 +35,18 @@ module control(
         output is_result_lo,
         output is_result_hi,
 
-        output read_w,
-        output read_b,
-        output read_h,
-        output read_bu,
-        output read_hu,
+        output mem_w,
+        output mem_b,
+        output mem_h,
+        output mem_bu,
+        output mem_hu,
 
         output mem_result_is_lwl,
         output mem_result_is_lwr,
         output mem_result_is_not_merged,
 
         output data_sram_en,
-        output [3:0] data_sram_wen,
+        output mem_wen,
 
         output reg_write,
         output reg_write_addr_is_rd,
@@ -55,10 +55,6 @@ module control(
         output reg_write_is_alu,
         output reg_write_is_mem
     );
-    wire data_sram_wen_1_bit;
-    assign data_sram_wen = {4{data_sram_wen_1_bit}};
-
-
     wire is_R_type = opcode == 6'b000000;
     wire imm_arith;
 
@@ -111,6 +107,7 @@ module control(
     wire func_xor   = func == 6'b100110;
 
     wire is_load = |{is_lw, is_lb, is_lbu, is_lh, is_lhu, is_lwl, is_lwr};
+    wire is_store = |{is_sw, is_sb, is_sh};
 
     wire branch_link;
     wire link = is_jal | branch_link | (is_R_type & func_jalr);
@@ -138,12 +135,10 @@ module control(
 
     assign alu_b_is_rt_data = is_R_type;
     assign alu_b_is_imm     =
-           is_sw | is_load | imm_arith;
+           is_store | is_load | imm_arith;
     assign alu_b_is_8       = link;
 
     assign data_sram_en = 1;
-
-    assign data_sram_wen_1_bit = is_sw;
 
     assign next_pc_is_jal_target =
            is_IF_ID_valid & (is_jal | is_j);
@@ -165,7 +160,7 @@ module control(
     assign alu_op =
            {12{
                 (is_R_type & (func_add | func_addu | func_jalr))
-                | is_addiu | is_addi | is_load | is_sw | link
+                | is_addiu | is_addi | is_load | is_store | link
             }} & `ALU_OP(`ALU_ADD) |
            {12{
                 (is_R_type & (func_subu | func_sub))
@@ -217,14 +212,16 @@ module control(
     assign lo_wen = is_R_type & func_mtlo;
     assign hi_wen = is_R_type & func_mthi;
 
-    assign read_w = is_lw | is_lwl | is_lwr;
-    assign read_b = is_lb;
-    assign read_h = is_lh;
-    assign read_bu = is_lbu;
-    assign read_hu = is_lhu;
+    assign mem_w = |{is_lw, is_lwl, is_lwr, is_sw};
+    assign mem_b = |{is_lb, is_sb};
+    assign mem_h = |{is_lh, is_sh};
+    assign mem_bu = is_lbu;
+    assign mem_hu = is_lhu;
 
     assign mem_result_is_lwl = is_lwl;
     assign mem_result_is_lwr = is_lwr;
     assign mem_result_is_not_merged =
            ~mem_result_is_lwl & ~mem_result_is_lwr;
+
+    assign mem_wen = is_store;
 endmodule

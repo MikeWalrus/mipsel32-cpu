@@ -32,8 +32,8 @@ module mycpu_top(
             start <= 1;
     end
 
-    wire [3:0] data_sram_wen_ID;
-    wire [3:0] data_sram_wen_EX;
+    wire mem_wen_ID;
+    wire mem_wen_EX;
 
     // pc
     wire [31:0] curr_pc_IF;
@@ -187,17 +187,23 @@ module mycpu_top(
     wire [1:0] byte_offset_MEM;
 
     // data memory read control
-    wire read_w_ID;
-    wire read_b_ID;
-    wire read_bu_ID;
-    wire read_h_ID;
-    wire read_hu_ID;
+    wire mem_w_ID;
+    wire mem_b_ID;
+    wire mem_bu_ID;
+    wire mem_h_ID;
+    wire mem_hu_ID;
 
-    wire read_w_MEM;
-    wire read_b_MEM;
-    wire read_bu_MEM;
-    wire read_h_MEM;
-    wire read_hu_MEM;
+    wire mem_w_EX;
+    wire mem_b_EX;
+    wire mem_bu_EX;
+    wire mem_h_EX;
+    wire mem_hu_EX;
+
+    wire mem_w_MEM;
+    wire mem_b_MEM;
+    wire mem_bu_MEM;
+    wire mem_h_MEM;
+    wire mem_hu_MEM;
 
     wire mem_result_is_lwl_ID;
     wire mem_result_is_lwr_ID;
@@ -211,21 +217,28 @@ module mycpu_top(
     wire [7:0] mem_ctrl_EX;
     wire [7:0] mem_ctrl_MEM;
     assign mem_ctrl_ID = {
-               read_w_ID,
-               read_b_ID,
-               read_bu_ID,
-               read_h_ID,
-               read_hu_ID,
+               mem_w_ID,
+               mem_b_ID,
+               mem_bu_ID,
+               mem_h_ID,
+               mem_hu_ID,
                mem_result_is_lwl_ID,
                mem_result_is_lwr_ID,
                mem_result_is_not_merged_ID
            };
     assign {
-            read_w_MEM,
-            read_b_MEM,
-            read_bu_MEM,
-            read_h_MEM,
-            read_hu_MEM,
+            mem_w_EX,
+            mem_b_EX,
+            mem_bu_EX,
+            mem_h_EX,
+            mem_hu_EX
+        } = mem_ctrl_EX[7:3];
+    assign {
+            mem_w_MEM,
+            mem_b_MEM,
+            mem_bu_MEM,
+            mem_h_MEM,
+            mem_hu_MEM,
             mem_result_is_lwl_MEM,
             mem_result_is_lwr_MEM,
             mem_result_is_not_merged_MEM
@@ -328,7 +341,7 @@ module mycpu_top(
                      .valid(IF_ID_reg_valid)
                  );
 
-    pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 + 18 + 8 + 4 + 5 + 9 + 8)) ID_EX_reg(
+    pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 + 18 + 8 + 1 + 5 + 9 + 8)) ID_EX_reg(
                      .clk(clk),
                      .reset(reset),
                      .stall(ID_EX_reg_stall),
@@ -339,13 +352,13 @@ module mycpu_top(
                      .in(
                          {
                              curr_pc_ID, rs_data_ID, rt_data_ID, imm_ID,
-                             alu_ctrl_ID, reg_write_sig_ID, data_sram_wen_ID,
+                             alu_ctrl_ID, reg_write_sig_ID, mem_wen_ID,
                              shamt_ID, mult_div_ctrl_ID, mem_ctrl_ID
                          }),
                      .out(
                          {
                              curr_pc_EX, rs_data_EX, rt_data_EX, imm_EX,
-                             alu_ctrl_EX, reg_write_sig_EX, data_sram_wen_EX,
+                             alu_ctrl_EX, reg_write_sig_EX, mem_wen_EX,
                              shamt_EX, mult_div_ctrl_EX, mem_ctrl_EX
                          }),
                      .valid(ID_EX_reg_valid)
@@ -482,18 +495,18 @@ module mycpu_top(
                 .is_result_lo(is_result_lo_ID),
                 .is_result_hi(is_result_hi_ID),
 
-                .read_b(read_b_ID),
-                .read_h(read_h_ID),
-                .read_w(read_w_ID),
-                .read_bu(read_bu_ID),
-                .read_hu(read_hu_ID),
+                .mem_b(mem_b_ID),
+                .mem_h(mem_h_ID),
+                .mem_w(mem_w_ID),
+                .mem_bu(mem_bu_ID),
+                .mem_hu(mem_hu_ID),
 
                 .mem_result_is_lwl(mem_result_is_lwl_ID),
                 .mem_result_is_lwr(mem_result_is_lwr_ID),
                 .mem_result_is_not_merged(mem_result_is_not_merged_ID),
 
                 .data_sram_en(data_sram_en),
-                .data_sram_wen(data_sram_wen_ID),
+                .mem_wen(mem_wen_ID),
 
                 .reg_write(reg_write_ID),
                 .reg_write_addr_is_rd(reg_write_addr_is_rd_ID),
@@ -614,8 +627,6 @@ module mycpu_top(
     // EX Stage
     //
 
-    assign data_sram_wdata = rt_data_EX;
-
     branch_target_gen branch_target_gen(
                           .pc(curr_pc_IF),
                           .offset(inst_imm),
@@ -652,14 +663,6 @@ module mycpu_top(
                .out(alu_b)
            );
 
-    assign data_sram_wen = data_sram_wen_EX;
-    addr_trans addr_trans_data(
-                   .virt_addr(result_EX),
-                   .phy_addr(data_sram_addr)
-               );
-
-
-
     wire mult_div_complete;
     assign ID_EX_reg_stall = ~mult_div_complete;
     wire [31:0] hi;
@@ -686,7 +689,28 @@ module mycpu_top(
                .out(result_EX)
            );
 
+    addr_trans addr_trans_data(
+                   .virt_addr(result_EX),
+                   .phy_addr(data_sram_addr)
+               );
     assign byte_offset_EX = data_sram_addr[1:0];
+
+    mem_wen_gen mem_wen_gen(
+                    .byte_offset(byte_offset_EX),
+                    .wen_1b(mem_wen_EX),
+                    .write_b(mem_b_EX),
+                    .write_h(mem_h_EX),
+                    .write_w(mem_w_EX),
+                    .wen_4b(data_sram_wen)
+                );
+
+    mem_write_data_gen mem_write_data_gen(
+                           .data(rt_data_EX),
+                           .write_b(mem_b_EX),
+                           .write_h(mem_h_EX),
+                           .write_w(mem_w_EX),
+                           .mem_write_data(data_sram_wdata)
+                       );
 
     //
     // MEM Stage
@@ -695,11 +719,11 @@ module mycpu_top(
     mem_read mem_read(
                  .data_sram_rdata(data_sram_rdata),
                  .byte_offset(byte_offset_MEM),
-                 .read_w(read_w_MEM),
-                 .read_b(read_b_MEM),
-                 .read_h(read_h_MEM),
-                 .read_bu(read_bu_MEM),
-                 .read_hu(read_hu_MEM),
+                 .read_w(mem_w_MEM),
+                 .read_b(mem_b_MEM),
+                 .read_h(mem_h_MEM),
+                 .read_bu(mem_bu_MEM),
+                 .read_hu(mem_hu_MEM),
                  .mem_read_data(mem_read_data)
              );
 
@@ -760,7 +784,7 @@ module mycpu_top(
 
     mux_1h #(.num_port(2)) reg_write_data_mux(
                .select({reg_write_is_alu_MEM, reg_write_is_mem_MEM}),
-               .in({result_MEM, mem_result }),
+               .in({result_MEM, mem_result}),
                .out(reg_write_data_MEM)
            );
 
