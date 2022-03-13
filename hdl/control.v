@@ -4,6 +4,7 @@ module control(
         input [5:0] opcode,
         input [5:0] func,
         input [4:0] rt,
+        input [4:0] rs,
 
         input [31:0] rs_data,
         input [31:0] rt_data,
@@ -51,7 +52,10 @@ module control(
         output reg_write_addr_is_rt,
         output reg_write_addr_is_31,
         output reg_write_is_alu,
-        output reg_write_is_mem
+        output reg_write_is_mem,
+
+        output mtc0,
+        output mfc0
     );
     wire is_R_type = opcode == 6'b000000;
     wire imm_arith;
@@ -106,6 +110,13 @@ module control(
     wire func_subu  = func == 6'b100011;
     wire func_xor   = func == 6'b100110;
 
+
+    // CP0
+    wire cp0 = opcode == 6'b010000;
+    assign mtc0 = cp0 & rs == 5'b00100;
+    assign mfc0 = cp0 & rs == 5'b00000;
+
+
     wire is_load = |{is_lw, is_lb, is_lbu, is_lh, is_lhu, is_lwl, is_lwr};
     wire is_store = |{is_sw, is_sb, is_sh, is_swl, is_swr};
 
@@ -119,7 +130,7 @@ module control(
 
     assign imm_is_sign_extend = ~(is_andi | is_ori | is_xori);
 
-    assign reg_write = (is_R_type) | is_load | link | imm_arith;
+    assign reg_write = |{is_R_type, is_load, link, imm_arith, mfc0};
     assign reg_write_addr_is_rd = is_R_type;
     assign reg_write_addr_is_31 = link_31;
     assign reg_write_addr_is_rt = ~reg_write_addr_is_31 & ~reg_write_addr_is_rd;

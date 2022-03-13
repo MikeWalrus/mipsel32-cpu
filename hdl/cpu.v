@@ -55,6 +55,8 @@ module mycpu_top(
     wire [4:0] shamt_EX;
     wire [5:0] func;
 
+    wire [4:0] rd_WB;
+
     // imm
     wire [31:0] imm_sign_extended;
     wire imm_is_sign_extend;
@@ -80,6 +82,10 @@ module mycpu_top(
     wire [31:0] branch_target;          // b*
     wire [31:0] jal_target =            // jal, j
          {curr_pc_IF[31:28] ,instruction_ID[25:0], {2{1'b0}}};
+
+    wire is_delay_slot_IF = ~next_pc_is_next;
+    wire is_delay_slot_ID;
+    wire is_delay_slot_WB;
 
     // signals that choose the result
     // from hi/lo or alu result
@@ -266,6 +272,7 @@ module mycpu_top(
     wire [4:0] reg_write_addr_WB;
 
     wire [31:0] reg_write_data_MEM;
+    wire [31:0] reg_write_data_WB_not_mfc0;
     wire [31:0] reg_write_data_WB;
 
 
@@ -297,8 +304,33 @@ module mycpu_top(
     assign {
             reg_write_WB,
             reg_write_addr_WB,
-            reg_write_data_WB
+            reg_write_data_WB_not_mfc0
         } = reg_write_sig_WB;
+
+    // cp0
+    wire mtc0_ID;
+    wire mtc0_WB;
+    wire mfc0_ID;
+    wire mfc0_WB;
+    wire [7:0] cp0_signals_ID;
+    wire [7:0] cp0_signals_EX;
+    wire [7:0] cp0_signals_MEM;
+    wire [7:0] cp0_signals_WB;
+    assign cp0_signals_ID =
+           {
+               mtc0_ID,
+               mfc0_ID,
+               rd,
+               is_delay_slot_ID
+           };
+    assign {
+            mtc0_WB,
+            mfc0_WB,
+            rd_WB,
+            is_delay_slot_WB
+        } = cp0_signals_WB;
+    wire mfc0_EX = cp0_signals_EX[2];
+    wire mfc0_MEM = cp0_signals_MEM[2];
 
     // pipeline registers control signals
     wire IF_ID_reg_valid_out;
@@ -326,7 +358,7 @@ module mycpu_top(
     wire MEM_WB_reg_valid;
 
     // pipeline registers
-    pipeline_reg #(.WIDTH(32 + 32)) IF_ID_reg(
+    pipeline_reg #(.WIDTH(32 + 32 + 1)) IF_ID_reg(
                      .clk(clk),
                      .reset(reset),
                      .stall(IF_ID_reg_stall),
@@ -334,14 +366,26 @@ module mycpu_top(
                      .allow_in(IF_ID_reg_allow_in),
                      .allow_out(IF_ID_reg_allow_out),
                      .valid_out(IF_ID_reg_valid_out),
-                     .in({curr_pc_IF, instruction_IF}),
-                     .out({curr_pc_ID, instruction_ID}),
+                     .in(
+                         {
+                             curr_pc_IF,
+                             instruction_IF,
+                             is_delay_slot_IF
+                         }),
+                     .out(
+                         {
+                             curr_pc_ID,
+                             instruction_ID,
+                             is_delay_slot_ID
+                         }),
                      .valid(IF_ID_reg_valid)
                  );
 
     pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 +
                           18 + 8 + 1 +
-                          5 + 9 + 7))
+                          5 + 9 + 7 +
+                          8
+                         ))
                  ID_EX_reg(
                      .clk(clk),
                      .reset(reset),
@@ -354,18 +398,24 @@ module mycpu_top(
                          {
                              curr_pc_ID, rs_data_ID, rt_data_ID, imm_ID,
                              alu_ctrl_ID, reg_write_sig_ID, mem_wen_ID,
-                             shamt_ID, mult_div_ctrl_ID, mem_ctrl_ID
+                             shamt_ID, mult_div_ctrl_ID, mem_ctrl_ID,
+                             cp0_signals_ID
                          }),
                      .out(
                          {
                              curr_pc_EX, rs_data_EX, rt_data_EX, imm_EX,
                              alu_ctrl_EX, reg_write_sig_EX, mem_wen_EX,
-                             shamt_EX, mult_div_ctrl_EX, mem_ctrl_EX
+                             shamt_EX, mult_div_ctrl_EX, mem_ctrl_EX,
+                             cp0_signals_EX
                          }),
                      .valid(ID_EX_reg_valid)
                  );
 
-    pipeline_reg #(.WIDTH(32 + 8 + 32 + 2 + 7 + 32)) EX_MEM_reg(
+    pipeline_reg #(.WIDTH(32 + 8 +
+                          32 + 2 +
+                          7 + 32 +
+                          8))
+                 EX_MEM_reg(
                      .clk(clk),
                      .reset(reset),
                      .stall(EX_MEM_reg_stall),
@@ -377,18 +427,20 @@ module mycpu_top(
                          {
                              curr_pc_EX, reg_write_sig_EX,
                              result_EX, byte_offset_EX,
-                             mem_ctrl_EX, rt_data_EX
+                             mem_ctrl_EX, rt_data_EX,
+                             cp0_signals_EX
                          }),
                      .out(
                          {
                              curr_pc_MEM, reg_write_sig_MEM,
                              result_MEM, byte_offset_MEM,
-                             mem_ctrl_MEM, rt_data_MEM
+                             mem_ctrl_MEM, rt_data_MEM,
+                             cp0_signals_MEM
                          }),
                      .valid(EX_MEM_reg_valid)
                  );
 
-    pipeline_reg #(.WIDTH(32 + 38)) MEM_WB_reg(
+    pipeline_reg #(.WIDTH(32 + 38 + 8)) MEM_WB_reg(
                      .clk(clk),
                      .reset(reset),
                      .stall(MEM_WB_reg_stall),
@@ -398,14 +450,16 @@ module mycpu_top(
                      .allow_out(MEM_WB_reg_allow_out),
                      .in({
                              curr_pc_MEM,
-                             reg_write_MEM,
-                             reg_write_addr_MEM,
-                             reg_write_data_MEM
+                             {reg_write_MEM,
+                              reg_write_addr_MEM,
+                              reg_write_data_MEM},
+                             cp0_signals_MEM
                          }),
                      .out(
                          {
                              curr_pc_WB,
-                             reg_write_sig_WB
+                             reg_write_sig_WB,
+                             cp0_signals_WB
                          }),
                      .valid(MEM_WB_reg_valid)
                  );
@@ -461,11 +515,12 @@ module mycpu_top(
     assign inst_imm = instruction_ID[15:0];
     assign func     = instruction_ID[5:0];
 
-    control control(
+    control control_unit(
                 .is_IF_ID_valid(IF_ID_reg_valid),
                 .opcode(opcode),
                 .func(func),
                 .rt(rt),
+                .rs(rs),
 
                 .rs_data(rs_data_ID),
                 .rt_data(rt_data_ID),
@@ -512,7 +567,10 @@ module mycpu_top(
                 .reg_write_addr_is_rt(reg_write_addr_is_rt_ID),
                 .reg_write_addr_is_31(reg_write_addr_is_31_ID),
                 .reg_write_is_alu(reg_write_is_alu_ID),
-                .reg_write_is_mem(reg_write_is_mem_ID)
+                .reg_write_is_mem(reg_write_is_mem_ID),
+
+                .mtc0(mtc0_ID),
+                .mfc0(mfc0_ID)
             );
 
     wire [31:0] rs_data_ID_no_forward;
@@ -616,8 +674,13 @@ module mycpu_top(
 
     hazard_detect hazard_detect(
                       .reg_write_is_mem_EX(reg_write_is_mem_EX),
+                      .mfc0_EX(mfc0_EX),
+                      .mfc0_MEM(mfc0_MEM),
+
                       .rs_data_ID_is_from_ex(rs_data_ID_is_from_ex),
                       .rt_data_ID_is_from_ex(rt_data_ID_is_from_ex),
+                      .rs_data_ID_is_from_mem(rs_data_ID_is_from_mem),
+                      .rt_data_ID_is_from_mem(rt_data_ID_is_from_mem),
                       .IF_ID_reg_stall(IF_ID_reg_stall)
                   );
 
@@ -765,6 +828,13 @@ module mycpu_top(
                .out(mem_result)
            );
 
+    mux_1h #(.num_port(2)) reg_write_data_mux(
+               .select({reg_write_is_alu_MEM, reg_write_is_mem_MEM}),
+               .in({result_MEM, mem_result}),
+               .out(reg_write_data_MEM)
+           );
+
+
     //
     // WB Stage
     //
@@ -786,11 +856,26 @@ module mycpu_top(
                .out(reg_write_addr_ID)
            );
 
-    mux_1h #(.num_port(2)) reg_write_data_mux(
-               .select({reg_write_is_alu_MEM, reg_write_is_mem_MEM}),
-               .in({result_MEM, mem_result}),
-               .out(reg_write_data_MEM)
-           );
+    wire [31:0] cp0_reg;
+    cp0 cp0(
+            .clk(clk),
+            .reset(reset),
+            .reg_num(rd_WB),
+            .sel(2'b00), // TODO
+            .reg_in(reg_write_data_WB),
+            .wen(mtc0_WB & MEM_WB_reg_valid),
+            .exception(0), // TODO
+            .eret(0), // TODO
+            .is_delay_slot(is_delay_slot_WB),
+            .pc(curr_pc_WB),
+            .interrupt(6'b0),
+            .excode(0), // TODO
+            .badvaddr_in(0), // TODO
+            .reg_out(cp0_reg)
+        );
+
+    assign reg_write_data_WB =
+           mfc0_WB ? cp0_reg : reg_write_data_WB_not_mfc0;
 
     assign debug_wb_pc = curr_pc_WB;
     assign debug_wb_rf_wen = {4{reg_write_WB & MEM_WB_reg_valid}};
