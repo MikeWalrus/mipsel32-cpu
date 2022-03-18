@@ -3,6 +3,7 @@ module alu(
         input [11:0] op, // one-hot
         input [31:0] a,
         input [31:0] b,
+        output overflow,
         output [31:0] result
     );
     wire cin;
@@ -16,7 +17,9 @@ module alu(
     assign adder_a = a;
     assign adder_b = binvert ? ~b : b;
     assign {cout, adder_out} = adder_a + adder_b + {{32{1'b0}},cin};
-    wire signed_overflow = (a[31] != b[31]) && (a[31] != adder_out[31]);
+    wire signed_overflow = (adder_a[31] == adder_b[31])
+         && (adder_a[31] != adder_out[31]);
+    assign overflow = signed_overflow;
 
     wire is_add  = op[`ALU_ADD];
     wire is_sub  = op[`ALU_SUB];
@@ -31,7 +34,7 @@ module alu(
     wire is_xor  = op[`ALU_XOR];
     wire is_nor  = op[`ALU_NOR];
 
-    wire bnegate = (is_sub | is_slt | is_sltu) ? 1 : 0;
+    wire bnegate = is_sub | is_slt | is_sltu;
     assign binvert = bnegate;
     assign cin = bnegate;
 

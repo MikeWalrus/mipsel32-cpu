@@ -12,6 +12,8 @@ module control(
         input exception_now,
         input eret_now,
 
+        output is_delay_slot_IF,
+
         output next_pc_is_next,
         output reg next_pc_is_branch_target,
         output reg next_pc_is_jal_target,
@@ -62,8 +64,11 @@ module control(
         output mtc0,
         output mfc0,
 
+        output overflow_en,
+
         output exc_syscall,
         output exc_reserved,
+        output exc_break,
         output eret
     );
     wire is_R_type = opcode == 6'b000000;
@@ -119,6 +124,7 @@ module control(
     wire func_subu  = func == 6'b100011;
     wire func_xor   = func == 6'b100110;
 
+    wire func_break   = func == 6'b001101;
     wire func_syscall = func == 6'b001100;
 
     // CP0
@@ -163,12 +169,14 @@ module control(
     assign data_sram_en = 1;
 
     wire branch_take;
+    wire is_branch;
     branch_ctrl branch_ctrl(
                     .en(is_IF_ID_valid),
                     .opcode(opcode),
                     .rt(rt),
                     .rs_data(rs_data),
                     .rt_data(rt_data),
+                    .is_branch(is_branch),
                     .take(branch_take),
                     .link(branch_link)
                 );
@@ -178,10 +186,10 @@ module control(
         next_pc_is_exception_entry = 0;
         next_pc_is_branch_target = 0;
         next_pc_is_epc = 0;
-        if (exception_now)
-            next_pc_is_exception_entry = 1;
-        else if (eret_now)
+        if (eret_now)
             next_pc_is_epc = 1;
+        else if (exception_now)
+            next_pc_is_exception_entry = 1;
         else if (is_IF_ID_valid) begin
             if (is_jal | is_j)
                 next_pc_is_jal_target = 1;
@@ -195,7 +203,12 @@ module control(
            ~next_pc_is_branch_target & ~next_pc_is_jal_target
            & ~next_pc_is_jr_target & ~next_pc_is_exception_entry
            & ~next_pc_is_epc;
-
+    assign is_delay_slot_IF = |{
+               is_branch, is_jal, is_j, is_R_type & (func_jr | func_jalr)
+           } & is_IF_ID_valid;
+    assign overflow_en =
+           (is_R_type & |{func_add, func_sub, func_sub})
+           | is_addi;
 
     assign alu_op =
            {12{
@@ -264,5 +277,33 @@ module control(
 
     // exception
     assign exc_syscall = is_R_type & func_syscall;
-    assign exc_reserved = 0;
+    assign exc_reserved = ~|{
+               is_R_type,
+               is_branch,
+               is_addi,
+               is_addiu,
+               is_andi,
+               is_j,
+               is_jal,
+               is_lb,
+               is_lbu,
+               is_lh,
+               is_lhu,
+               is_lui,
+               is_lw,
+               is_lwl,
+               is_lwr,
+               is_ori,
+               is_sb,
+               is_sh,
+               is_slti,
+               is_sltiu,
+               is_sw,
+               is_swl,
+               is_swr,
+               is_xori,
+               cp0
+           };
+
+    assign exc_break = is_R_type & func_break;
 endmodule

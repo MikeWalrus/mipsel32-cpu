@@ -4,6 +4,7 @@ module branch_ctrl(
         input [4:0] rt,
         input [31:0] rs_data,
         input [31:0] rt_data,
+        output is_branch,
         output take,
         output link
     );
@@ -17,6 +18,16 @@ module branch_ctrl(
     wire is_blez   = opcode == 6'b000110;
     wire is_bltz   = is_REGIMM && (rt == 5'b00000);
     wire is_bltzal = is_REGIMM && (rt == 5'b10000);
+    assign is_branch = |{
+               is_beq,
+               is_bne,
+               is_bgtz,
+               is_bgez,
+               is_bgezal,
+               is_blez,
+               is_bltz,
+               is_bltzal
+           };
 
     wire bgez = is_bgez | is_bgezal;
     wire bltz = is_bltz | is_bltzal;
