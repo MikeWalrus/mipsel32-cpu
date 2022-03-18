@@ -9,10 +9,15 @@ module control(
         input [31:0] rs_data,
         input [31:0] rt_data,
 
+        input exception_now,
+        input eret_now,
+
         output next_pc_is_next,
-        output next_pc_is_branch_target,
-        output next_pc_is_jal_target,
-        output next_pc_is_jr_target,
+        output reg next_pc_is_branch_target,
+        output reg next_pc_is_jal_target,
+        output reg next_pc_is_jr_target,
+        output reg next_pc_is_exception_entry,
+        output reg next_pc_is_epc,
 
         output imm_is_sign_extend,
 
@@ -55,7 +60,11 @@ module control(
         output reg_write_is_mem,
 
         output mtc0,
-        output mfc0
+        output mfc0,
+
+        output exc_syscall,
+        output exc_reserved,
+        output eret
     );
     wire is_R_type = opcode == 6'b000000;
     wire imm_arith;
@@ -110,11 +119,13 @@ module control(
     wire func_subu  = func == 6'b100011;
     wire func_xor   = func == 6'b100110;
 
+    wire func_syscall = func == 6'b001100;
 
     // CP0
     wire cp0 = opcode == 6'b010000;
     assign mtc0 = cp0 & rs == 5'b00100;
     assign mfc0 = cp0 & rs == 5'b00000;
+    assign eret = cp0 & (rs[4] == 1) & (func == 6'b011000);
 
 
     wire is_load = |{is_lw, is_lb, is_lbu, is_lh, is_lhu, is_lwl, is_lwr};
@@ -151,22 +162,40 @@ module control(
 
     assign data_sram_en = 1;
 
-    assign next_pc_is_jal_target =
-           is_IF_ID_valid & (is_jal | is_j);
-    assign next_pc_is_jr_target =
-           is_IF_ID_valid & is_R_type & (func_jr | func_jalr);
-    assign next_pc_is_next =
-           ~next_pc_is_branch_target & ~next_pc_is_jal_target & ~next_pc_is_jr_target;
-
+    wire branch_take;
     branch_ctrl branch_ctrl(
                     .en(is_IF_ID_valid),
                     .opcode(opcode),
                     .rt(rt),
                     .rs_data(rs_data),
                     .rt_data(rt_data),
-                    .take(next_pc_is_branch_target),
+                    .take(branch_take),
                     .link(branch_link)
                 );
+    always @(*) begin
+        next_pc_is_jr_target = 0;
+        next_pc_is_jal_target = 0;
+        next_pc_is_exception_entry = 0;
+        next_pc_is_branch_target = 0;
+        next_pc_is_epc = 0;
+        if (exception_now)
+            next_pc_is_exception_entry = 1;
+        else if (eret_now)
+            next_pc_is_epc = 1;
+        else if (is_IF_ID_valid) begin
+            if (is_jal | is_j)
+                next_pc_is_jal_target = 1;
+            else if (is_R_type & (func_jr | func_jalr))
+                next_pc_is_jr_target = 1;
+            else if (branch_take)
+                next_pc_is_branch_target = 1;
+        end
+    end
+    assign next_pc_is_next =
+           ~next_pc_is_branch_target & ~next_pc_is_jal_target
+           & ~next_pc_is_jr_target & ~next_pc_is_exception_entry
+           & ~next_pc_is_epc;
+
 
     assign alu_op =
            {12{
@@ -232,4 +261,8 @@ module control(
     assign mem_wr = is_swr | is_lwr;
 
     assign mem_wen = is_store;
+
+    // exception
+    assign exc_syscall = is_R_type & func_syscall;
+    assign exc_reserved = 0;
 endmodule

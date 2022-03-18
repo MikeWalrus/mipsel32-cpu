@@ -9,3 +9,13 @@
 `define CAUSE 5'd13
 `define EPC 5'd14
 `define CONFIG 5'd16
+
+`define EXC_Int 5'h00
+`define EXC_AdEL 5'h04
+`define EXC_AdES 5'h05
+`define EXC_Sys 5'h08
+`define EXC_Bp 5'h09
+`define EXC_RI 5'h0a
+`define EXC_Ov 5'h0c
+
+`define ERET 5'h1f

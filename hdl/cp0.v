@@ -7,18 +7,24 @@ module cp0(
         input [1:0] sel,
         input [31:0] reg_in,
 
+        input MEM_WB_reg_valid,
         input wen,
         input exception,
-        input eret,
         input is_delay_slot,
         input [31:0] pc,
         input [5:0] interrupt,
-        input [4:0] excode,
+        input [4:0] exccode,
         input [31:0] badvaddr_in,
 
-        output reg [31:0] reg_out
-    );
+        output reg [31:0] reg_out,
+        output [31:0] epc_out,
 
+        output reg [3:0] pipeline_reg_flush,
+
+        output reg exception_now,
+        output reg eret_now
+    );
+    wire eret = MEM_WB_reg_valid & exception & exccode == `ERET;
     wire status_bev = 1'b1;
     reg [7:0] status_im;
     reg status_exl;
@@ -38,10 +44,10 @@ module cp0(
         if (reset) begin
             status_exl <= 1'b0;
             status_ie <= 1'b0;
-        end else if (exception) begin
-            status_exl <= 1'b1;
         end else if (eret) begin
             status_exl <= 1'b0;
+        end else if (exception) begin
+            status_exl <= 1'b1;
         end else if (reg_num == `STATUS) begin
             if (wen) begin
                 status_exl <= reg_in[1];
@@ -53,7 +59,7 @@ module cp0(
     reg cause_bd;
     reg cause_ti;
     reg [7:0] cause_ip;
-    reg [4:0] cause_excode;
+    reg [4:0] cause_exccode;
     wire [31:0] cause =
          {
              cause_bd,
@@ -61,7 +67,7 @@ module cp0(
              {14{1'b0}},
              cause_ip,
              1'b0,
-             cause_excode,
+             cause_exccode,
              {2{1'b0}}
          };
 
@@ -92,22 +98,21 @@ module cp0(
 
     always @(posedge clk) begin
         if (reset) begin
-            cause_excode <= 5'd0;
+            cause_exccode <= 5'd0;
         end else if (exception)
-            cause_excode <= excode;
+            cause_exccode <= exccode;
     end
 
     reg [31:0] epc;
+    assign epc_out = epc;
     wire [31:0] epc_next = is_delay_slot ? pc - 32'd4 : pc;
     always @(posedge clk) begin
-        if (exception) begin
-            if (!status_exl)
-                epc <= epc_next;
-            else if (wen && reg_num == `EPC)
-                epc <= reg_in;
-            else
-                epc <= epc;
-        end
+        if (exception & !status_exl) begin
+            epc <= epc_next;
+        end else if (wen && reg_num == `EPC)
+            epc <= reg_in;
+        else
+            epc <= epc;
     end
 
 
@@ -159,6 +164,20 @@ module cp0(
             default:
                 reg_out = 0;
         endcase
+    end
+
+    always @(*) begin
+        pipeline_reg_flush = 4'b0;
+        exception_now = 0;
+        eret_now = 0;
+        if (MEM_WB_reg_valid & exception & ~status_exl) begin
+            pipeline_reg_flush = {4{1'b1}};
+            exception_now = 1;
+        end
+        if (eret) begin
+            eret_now = 1;
+            pipeline_reg_flush = {4{1'b1}};
+        end
     end
 
 endmodule

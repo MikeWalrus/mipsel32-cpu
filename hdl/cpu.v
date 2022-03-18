@@ -1,3 +1,4 @@
+`include "cp0.vh"
 module mycpu_top(
         input clk,
         input resetn,
@@ -69,6 +70,7 @@ module mycpu_top(
     wire [31:0] rs_data_EX;
     wire [31:0] rt_data_EX;
     wire [31:0] rt_data_MEM;
+    wire [31:0] rt_data_WB;
 
     // control transfer
     wire [31:0] next_pc;
@@ -77,11 +79,14 @@ module mycpu_top(
     wire next_pc_is_branch_target;
     wire next_pc_is_jal_target;
     wire next_pc_is_jr_target;
+    wire next_pc_is_exception_entry;
+    wire next_pc_is_epc;
 
     wire [31:0] jr_target = rs_data_ID; // jr, jalr
     wire [31:0] branch_target;          // b*
     wire [31:0] jal_target =            // jal, j
          {curr_pc_IF[31:28] ,instruction_ID[25:0], {2{1'b0}}};
+    wire [31:0] cp0_epc;
 
     wire is_delay_slot_IF = ~next_pc_is_next;
     wire is_delay_slot_ID;
@@ -329,8 +334,11 @@ module mycpu_top(
             rd_WB,
             is_delay_slot_WB
         } = cp0_signals_WB;
-    wire mfc0_EX = cp0_signals_EX[2];
-    wire mfc0_MEM = cp0_signals_MEM[2];
+    // Notice: These indices is related to the order of assignment above.
+    wire mfc0_EX = cp0_signals_EX[6];
+    wire mfc0_MEM = cp0_signals_MEM[6];
+    wire exception_now;
+    wire eret_now;
 
     // pipeline registers control signals
     wire IF_ID_reg_valid_out;
@@ -338,30 +346,69 @@ module mycpu_top(
     wire IF_ID_reg_stall;
     wire IF_ID_reg_valid;
     wire IF_ID_reg_allow_in;
+    wire IF_ID_reg_flush;
 
     wire ID_EX_reg_valid_in = IF_ID_reg_valid_out;
     wire ID_EX_reg_valid_out;
     wire ID_EX_reg_allow_out;
     wire ID_EX_reg_stall;
     wire ID_EX_reg_valid;
+    wire ID_EX_reg_flush;
 
     wire EX_MEM_reg_valid_in = ID_EX_reg_valid_out;
     wire EX_MEM_reg_valid_out;
     wire EX_MEM_reg_allow_out;
     wire EX_MEM_reg_stall = 0;
     wire EX_MEM_reg_valid;
+    wire EX_MEM_reg_flush;
 
     wire MEM_WB_reg_valid_in = EX_MEM_reg_valid_out;
     wire MEM_WB_reg_valid_out;
     wire MEM_WB_reg_allow_out = 1;
     wire MEM_WB_reg_stall = 0;
     wire MEM_WB_reg_valid;
+    wire MEM_WB_reg_flush;
+
+    // exception signals
+    wire exception_IF;
+    wire exception_ID;
+    wire exception_EX;
+    wire exception_MEM;
+    wire exception_WB;
+    wire exception_ID_old;
+    wire exception_EX_old;
+    wire exception_MEM_old;
+    wire exception_WB_old;
+
+    wire [4:0] exccode_IF;
+    wire [4:0] exccode_ID;
+    wire [4:0] exccode_EX;
+    wire [4:0] exccode_MEM;
+    wire [4:0] exccode_WB;
+    wire [4:0] exccode_ID_old; // from IF
+    wire [4:0] exccode_EX_old; // from ID
+    wire [4:0] exccode_MEM_old; // from EX
+    wire [4:0] exccode_WB_old; // from MEM
+
+    // TODO: remove this and actually implement these exceptions
+    assign exception_EX = exception_EX_old;
+    assign exception_MEM = exception_MEM_old;
+    assign exception_WB = exception_WB_old;
+    assign exccode_EX = exccode_EX_old;
+    assign exccode_MEM = exccode_MEM_old;
+    assign exccode_WB = exccode_WB_old;
+
+    wire exc_syscall_ID;
+    wire exc_reserved_ID;
+    wire eret_ID;
 
     // pipeline registers
-    pipeline_reg #(.WIDTH(32 + 32 + 1)) IF_ID_reg(
+    pipeline_reg #(.WIDTH(32 + 32 + 1 + 1 + 5)) IF_ID_reg(
                      .clk(clk),
                      .reset(reset),
                      .stall(IF_ID_reg_stall),
+                     .flush(IF_ID_reg_flush),
+
                      .valid_in(start),
                      .allow_in(IF_ID_reg_allow_in),
                      .allow_out(IF_ID_reg_allow_out),
@@ -370,13 +417,17 @@ module mycpu_top(
                          {
                              curr_pc_IF,
                              instruction_IF,
-                             is_delay_slot_IF
+                             is_delay_slot_IF,
+                             exception_IF,
+                             exccode_IF
                          }),
                      .out(
                          {
                              curr_pc_ID,
                              instruction_ID,
-                             is_delay_slot_ID
+                             is_delay_slot_ID,
+                             exception_ID_old,
+                             exccode_ID_old
                          }),
                      .valid(IF_ID_reg_valid)
                  );
@@ -384,12 +435,14 @@ module mycpu_top(
     pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 +
                           18 + 8 + 1 +
                           5 + 9 + 7 +
-                          8
+                          8 + 1 + 5
                          ))
                  ID_EX_reg(
                      .clk(clk),
                      .reset(reset),
                      .stall(ID_EX_reg_stall),
+                     .flush(ID_EX_reg_flush),
+
                      .valid_in(ID_EX_reg_valid_in),
                      .allow_in(IF_ID_reg_allow_out),
                      .valid_out(ID_EX_reg_valid_out),
@@ -399,14 +452,14 @@ module mycpu_top(
                              curr_pc_ID, rs_data_ID, rt_data_ID, imm_ID,
                              alu_ctrl_ID, reg_write_sig_ID, mem_wen_ID,
                              shamt_ID, mult_div_ctrl_ID, mem_ctrl_ID,
-                             cp0_signals_ID
+                             cp0_signals_ID, exception_ID, exccode_ID
                          }),
                      .out(
                          {
                              curr_pc_EX, rs_data_EX, rt_data_EX, imm_EX,
                              alu_ctrl_EX, reg_write_sig_EX, mem_wen_EX,
                              shamt_EX, mult_div_ctrl_EX, mem_ctrl_EX,
-                             cp0_signals_EX
+                             cp0_signals_EX, exception_EX_old, exccode_EX_old
                          }),
                      .valid(ID_EX_reg_valid)
                  );
@@ -414,11 +467,14 @@ module mycpu_top(
     pipeline_reg #(.WIDTH(32 + 8 +
                           32 + 2 +
                           7 + 32 +
-                          8))
+                          8 +
+                          1 + 5))
                  EX_MEM_reg(
                      .clk(clk),
                      .reset(reset),
                      .stall(EX_MEM_reg_stall),
+                     .flush(EX_MEM_reg_flush),
+
                      .valid_in(EX_MEM_reg_valid_in),
                      .allow_in(ID_EX_reg_allow_out),
                      .valid_out(EX_MEM_reg_valid_out),
@@ -428,22 +484,26 @@ module mycpu_top(
                              curr_pc_EX, reg_write_sig_EX,
                              result_EX, byte_offset_EX,
                              mem_ctrl_EX, rt_data_EX,
-                             cp0_signals_EX
+                             cp0_signals_EX,
+                             exception_EX, exccode_EX
                          }),
                      .out(
                          {
                              curr_pc_MEM, reg_write_sig_MEM,
                              result_MEM, byte_offset_MEM,
                              mem_ctrl_MEM, rt_data_MEM,
-                             cp0_signals_MEM
+                             cp0_signals_MEM,
+                             exception_MEM_old, exccode_MEM_old
                          }),
                      .valid(EX_MEM_reg_valid)
                  );
 
-    pipeline_reg #(.WIDTH(32 + 38 + 8)) MEM_WB_reg(
+    pipeline_reg #(.WIDTH(32 + 38 + 32 + 8 + 1 + 5)) MEM_WB_reg(
                      .clk(clk),
                      .reset(reset),
                      .stall(MEM_WB_reg_stall),
+                     .flush(MEM_WB_reg_flush),
+
                      .valid_in(MEM_WB_reg_valid_in),
                      .allow_in(EX_MEM_reg_allow_out),
                      .valid_out(MEM_WB_reg_valid_out),
@@ -453,13 +513,19 @@ module mycpu_top(
                              {reg_write_MEM,
                               reg_write_addr_MEM,
                               reg_write_data_MEM},
-                             cp0_signals_MEM
+                             rt_data_MEM,
+                             cp0_signals_MEM,
+                             exception_MEM,
+                             exccode_MEM
                          }),
                      .out(
                          {
                              curr_pc_WB,
                              reg_write_sig_WB,
-                             cp0_signals_WB
+                             rt_data_WB,
+                             cp0_signals_WB,
+                             exception_WB_old,
+                             exccode_WB_old
                          }),
                      .valid(MEM_WB_reg_valid)
                  );
@@ -478,20 +544,24 @@ module mycpu_top(
 
     wire [31:0] next_pc_if_no_stall;
     assign next_pc = IF_ID_reg_allow_in ? next_pc_if_no_stall : curr_pc_IF;
-    mux_1h #(.num_port(4)) next_pc_mux(
+    mux_1h #(.num_port(6)) next_pc_mux(
                .select(
                    {
                        next_pc_is_next,
                        next_pc_is_branch_target,
                        next_pc_is_jal_target,
-                       next_pc_is_jr_target
+                       next_pc_is_jr_target,
+                       next_pc_is_exception_entry,
+                       next_pc_is_epc
                    }),
                .in(
                    {
                        curr_pc_IF+32'd4,
                        branch_target,
                        jal_target,
-                       jr_target
+                       jr_target,
+                       32'hbfc00380,
+                       cp0_epc
                    }),
                .out(next_pc_if_no_stall)
            );
@@ -502,6 +572,15 @@ module mycpu_top(
                    .phy_addr(inst_sram_addr)
                );
 
+    wire inst_addr_error = curr_pc_IF[1:0] != 2'b00;
+    exception_combine inst_addr_error_exception(
+                          .exception_h(1'b0),
+                          .exccode_h({5{1'bz}}),
+                          .exception_l(inst_addr_error),
+                          .exccode_l(`EXC_AdEL),
+                          .exception_out(exception_IF),
+                          .exccode_out(exccode_IF)
+                      );
 
     //
     // ID Stage
@@ -525,10 +604,15 @@ module mycpu_top(
                 .rs_data(rs_data_ID),
                 .rt_data(rt_data_ID),
 
+                .exception_now(exception_now),
+                .eret_now(eret_now),
+
                 .next_pc_is_next(next_pc_is_next),
                 .next_pc_is_branch_target(next_pc_is_branch_target),
                 .next_pc_is_jal_target(next_pc_is_jal_target),
                 .next_pc_is_jr_target(next_pc_is_jr_target),
+                .next_pc_is_exception_entry(next_pc_is_exception_entry),
+                .next_pc_is_epc(next_pc_is_epc),
 
                 .imm_is_sign_extend(imm_is_sign_extend),
 
@@ -570,7 +654,11 @@ module mycpu_top(
                 .reg_write_is_mem(reg_write_is_mem_ID),
 
                 .mtc0(mtc0_ID),
-                .mfc0(mfc0_ID)
+                .mfc0(mfc0_ID),
+
+                .exc_syscall(exc_syscall_ID),
+                .exc_reserved(exc_reserved_ID),
+                .eret(eret_ID)
             );
 
     wire [31:0] rs_data_ID_no_forward;
@@ -581,7 +669,7 @@ module mycpu_top(
                 .r_data1(rs_data_ID_no_forward),
                 .r_addr2(rt),
                 .r_data2(rt_data_ID_no_forward),
-                .w_enable(reg_write_WB & MEM_WB_reg_valid),
+                .w_enable(reg_write_WB & MEM_WB_reg_valid & ~exception_WB),
                 .w_addr(reg_write_addr_WB),
                 .w_data(reg_write_data_WB)
             );
@@ -684,6 +772,35 @@ module mycpu_top(
                       .IF_ID_reg_stall(IF_ID_reg_stall)
                   );
 
+    wire exception_after_reserved;
+    wire [4:0] exccode_after_reserved;
+    exception_combine reserved_exception(
+                          .exception_h(exception_ID_old),
+                          .exccode_h(exccode_ID_old),
+                          .exception_l(exc_reserved_ID),
+                          .exccode_l(`EXC_RI),
+                          .exception_out(exception_after_reserved),
+                          .exccode_out(exccode_after_reserved)
+                      );
+    wire exception_after_eret;
+    wire [4:0] exccode_after_eret;
+    exception_combine eret_as_exception(
+                          .exception_h(exception_after_reserved),
+                          .exccode_h(exccode_after_reserved),
+                          .exception_l(eret_ID),
+                          .exccode_l(`ERET),
+                          .exception_out(exception_after_eret),
+                          .exccode_out(exccode_after_eret)
+                      );
+    exception_combine syscall_exception(
+                          .exception_h(exception_after_eret),
+                          .exccode_h(exccode_after_eret),
+                          .exception_l(exc_syscall_ID),
+                          .exccode_l(`EXC_Sys),
+                          .exception_out(exception_ID),
+                          .exccode_out(exccode_ID)
+                      );
+
 
     //
     // EX Stage
@@ -731,6 +848,7 @@ module mycpu_top(
     wire [31:0] lo;
     mult_div mult_div(
                  .clk(clk),
+                 .en(~exception_EX_MEM_WB),
                  .reset(reset),
                  .is_mult(is_mult_EX),
                  .is_multu(is_multu_EX),
@@ -757,9 +875,14 @@ module mycpu_top(
                );
     assign byte_offset_EX = data_sram_addr[1:0];
 
+    wire exception_EX_MEM_WB = |{exception_EX, exception_MEM, exception_WB};
     mem_wen_gen mem_wen_gen(
                     .byte_offset(byte_offset_EX),
-                    .wen_1b(mem_wen_EX),
+                    .wen_1b(
+                        &{mem_wen_EX,
+                          ID_EX_reg_valid,
+                          ~exception_EX_MEM_WB
+                         }),
                     .write_b(mem_b_EX),
                     .write_h(mem_h_EX),
                     .write_w(mem_w_EX),
@@ -862,16 +985,29 @@ module mycpu_top(
             .reset(reset),
             .reg_num(rd_WB),
             .sel(2'b00), // TODO
-            .reg_in(reg_write_data_WB),
+            .reg_in(rt_data_WB),
+
+            .MEM_WB_reg_valid(MEM_WB_reg_valid),
             .wen(mtc0_WB & MEM_WB_reg_valid),
-            .exception(0), // TODO
-            .eret(0), // TODO
+            .exception(exception_WB),
             .is_delay_slot(is_delay_slot_WB),
             .pc(curr_pc_WB),
             .interrupt(6'b0),
-            .excode(0), // TODO
+            .exccode(exccode_WB),
             .badvaddr_in(0), // TODO
-            .reg_out(cp0_reg)
+            .reg_out(cp0_reg),
+
+            .epc_out(cp0_epc),
+
+            .pipeline_reg_flush(
+                {
+                    IF_ID_reg_flush,
+                    ID_EX_reg_flush,
+                    EX_MEM_reg_flush,
+                    MEM_WB_reg_flush
+                }),
+            .exception_now(exception_now),
+            .eret_now(eret_now)
         );
 
     assign reg_write_data_WB =

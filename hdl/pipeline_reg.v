@@ -6,6 +6,8 @@ module pipeline_reg #
         input clk,
         input reset,
         input stall,
+        input flush,
+
         input valid_in,
         output allow_in,
         input allow_out,
@@ -15,12 +17,12 @@ module pipeline_reg #
         output reg valid
     );
     assign valid_out = valid & ~stall;
-    assign allow_in = ~valid | (~stall & allow_out);
+    assign allow_in = ~valid | (~stall & allow_out) | flush;
     always @(posedge clk) begin
         if (reset)
             valid <= 0;
         else if (allow_in)
-            valid <= valid_in;
+            valid <= valid_in & ~flush;
 
         if (valid_in && allow_in)
             out <= in;

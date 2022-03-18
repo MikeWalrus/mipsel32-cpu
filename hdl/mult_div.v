@@ -1,5 +1,6 @@
 module mult_div(
         input clk,
+        input en,
         input reset,
         input is_mult,
         input is_multu,
@@ -16,7 +17,7 @@ module mult_div(
     wire [63:0] unsigned_product = rs_data * rt_data;
     wire [63:0] signed_product = $signed(rs_data) * $signed(rt_data);
 
-    wire div_en = is_div | is_divu;
+    wire div_en = en & (is_div | is_divu);
     wire [31:0] quotient;
     wire [31:0] remainder;
     wire div_complete;
@@ -36,17 +37,19 @@ module mult_div(
 
 
     always @(posedge clk) begin
-        if (is_mult)
-            {hi, lo} <= signed_product;
-        else if (is_multu)
-            {hi, lo} <= unsigned_product;
-        else if (hi_wen)
-            hi <= rs_data;
-        else if (lo_wen)
-            lo <= rs_data;
-        else if (div_en) begin
-            lo <= quotient;
-            hi <= remainder;
+        if (en) begin
+            if (is_mult)
+                {hi, lo} <= signed_product;
+            else if (is_multu)
+                {hi, lo} <= unsigned_product;
+            else if (hi_wen)
+                hi <= rs_data;
+            else if (lo_wen)
+                lo <= rs_data;
+            else if (div_en) begin
+                lo <= quotient;
+                hi <= remainder;
+            end
         end
     end
 endmodule
