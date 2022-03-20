@@ -76,23 +76,24 @@ module tlb #(
         assign s1_match[i] = (tlb_vpn2[i] == s1_vpn2) && ((tlb_asid[i] == s1_asid) || tlb_g[i]);
     end
 
-    localparam mux_data_width = $clog2(TLBNUM) + 20 + 3 + 1 + 1; // s_index, s_pfn, s_c, s_d, s_v
-    wire [mux_data_width*TLBNUM-1:0] mux_in_data0, mux_in_data1;
+    localparam MUX_DATA_WIDTH = $clog2(TLBNUM) + 20 + 3 + 1 + 1; // s_index, s_pfn, s_c, s_d, s_v
+    localparam TLBNUM_WIDTH   = $clog2(TLBNUM);
+    wire [MUX_DATA_WIDTH*TLBNUM-1:0] mux_in_data0, mux_in_data1;
 
     for (i = 0; i < TLBNUM; i = i + 1) begin
-        assign mux_in_data0[(i+1)*mux_data_width-1:i*mux_data_width] =
-               ({({$clog2(TLBNUM){1}} & i), tlb_pfn0[i], tlb_c0[i], tlb_d0[i], tlb_v0[i]} & {mux_data_width{~s0_odd_page}}) |
-               ({({$clog2(TLBNUM){1}} & i), tlb_pfn1[i], tlb_c1[i], tlb_d1[i], tlb_v1[i]} & {mux_data_width{s0_odd_page}});
-        assign mux_in_data1[(i+1)*mux_data_width-1:i*mux_data_width] =
-               ({({$clog2(TLBNUM){1}} & i), tlb_pfn0[i], tlb_c0[i], tlb_d0[i], tlb_v0[i]} & {mux_data_width{~s1_odd_page}}) |
-               ({({$clog2(TLBNUM){1}} & i), tlb_pfn1[i], tlb_c1[i], tlb_d1[i], tlb_v1[i]} & {mux_data_width{s1_odd_page}});
+        assign mux_in_data0[(i+1)*MUX_DATA_WIDTH-1:i*MUX_DATA_WIDTH] =
+               ({i[TLBNUM_WIDTH-1:0], tlb_pfn0[i], tlb_c0[i], tlb_d0[i], tlb_v0[i]} & {MUX_DATA_WIDTH{~s0_odd_page}}) |
+               ({i[TLBNUM_WIDTH-1:0], tlb_pfn1[i], tlb_c1[i], tlb_d1[i], tlb_v1[i]} & {MUX_DATA_WIDTH{s0_odd_page}});
+        assign mux_in_data1[(i+1)*MUX_DATA_WIDTH-1:i*MUX_DATA_WIDTH] =
+               ({i[TLBNUM_WIDTH-1:0], tlb_pfn0[i], tlb_c0[i], tlb_d0[i], tlb_v0[i]} & {MUX_DATA_WIDTH{~s1_odd_page}}) |
+               ({i[TLBNUM_WIDTH-1:0], tlb_pfn1[i], tlb_c1[i], tlb_d1[i], tlb_v1[i]} & {MUX_DATA_WIDTH{s1_odd_page}});
     end
 
-    wire [mux_data_width-1:0] mux_data_out0, mux_data_out1;
+    wire [MUX_DATA_WIDTH-1:0] mux_data_out0, mux_data_out1;
     mux_1h #
         (
             .num_port   (TLBNUM),
-            .data_width (mux_data_width)
+            .data_width (MUX_DATA_WIDTH)
         )
         s0_mux
         (
@@ -103,7 +104,7 @@ module tlb #(
     mux_1h #
         (
             .num_port   (TLBNUM),
-            .data_width (mux_data_width)
+            .data_width (MUX_DATA_WIDTH)
         )
         s1_mux
         (
@@ -124,20 +125,21 @@ module tlb #(
     reg [7:0]  r_asid_reg;
     reg        r_g_reg;
     reg [19:0] r_pfn0_reg, r_pfn1_reg;
-    reg [2:0]  r_c0_reg, r_c1_reg, r_d0_reg, r_d1_reg, r_v0_reg, r_v1_reg;
+    reg [2:0]  r_c0_reg, r_c1_reg;
+    reg        r_d0_reg, r_d1_reg, r_v0_reg, r_v1_reg;
 
     always @(*) begin
-        r_vpn2_reg <= tlb_vpn2[r_index];
-        r_asid_reg <= tlb_asid[r_index];
-        r_g_reg    <= tlb_g[r_index];
-        r_pfn0_reg <= tlb_pfn0[r_index];
-        r_c0_reg   <= tlb_c0[r_index];
-        r_d0_reg   <= tlb_d0[r_index];
-        r_v0_reg   <= tlb_v0[r_index];
-        r_pfn1_reg <= tlb_pfn1[r_index];
-        r_c1_reg   <= tlb_c1[r_index];
-        r_d1_reg   <= tlb_d1[r_index];
-        r_v1_reg   <= tlb_v1[r_index];
+        r_vpn2_reg = tlb_vpn2[r_index];
+        r_asid_reg = tlb_asid[r_index];
+        r_g_reg    = tlb_g[r_index];
+        r_pfn0_reg = tlb_pfn0[r_index];
+        r_c0_reg   = tlb_c0[r_index];
+        r_d0_reg   = tlb_d0[r_index];
+        r_v0_reg   = tlb_v0[r_index];
+        r_pfn1_reg = tlb_pfn1[r_index];
+        r_c1_reg   = tlb_c1[r_index];
+        r_d1_reg   = tlb_d1[r_index];
+        r_v1_reg   = tlb_v1[r_index];
     end
 
     assign r_vpn2 = r_vpn2_reg;
