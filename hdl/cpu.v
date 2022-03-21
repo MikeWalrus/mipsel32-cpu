@@ -398,6 +398,8 @@ module mycpu_top(
     wire exception_MEM_old;
     wire exception_WB_old;
 
+    wire exception_EX_MEM_WB = |{exception_EX, exception_MEM, exception_WB};
+
     wire [4:0] exccode_IF;
     wire [4:0] exccode_ID;
     wire [4:0] exccode_EX;
@@ -974,7 +976,6 @@ module mycpu_top(
                           .exccode_out(exccode_EX)
                       );
 
-    wire exception_EX_MEM_WB = |{exception_EX, exception_MEM, exception_WB};
     mem_wen_gen mem_wen_gen(
                     .byte_offset(byte_offset_EX),
                     .wen_1b(
