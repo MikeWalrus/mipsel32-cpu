@@ -24,15 +24,6 @@ module mycpu_top(
     assign reset = ~resetn;
     assign inst_sram_en = 1;
 
-    // hack: delay one cycle
-    reg start;
-    always @(posedge clk) begin
-        if (reset)
-            start <= 0;
-        else
-            start <= 1;
-    end
-
     wire mem_wen_ID;
     wire mem_wen_EX;
 
@@ -359,6 +350,9 @@ module mycpu_top(
 
 
     // pipeline registers control signals
+    wire pre_IF_valid_out = start;
+
+    wire IF_ID_reg_valid_in = pre_IF_valid_out;
     wire IF_ID_reg_valid_out;
     wire IF_ID_reg_allow_out;
     wire IF_ID_reg_stall;
@@ -428,7 +422,7 @@ module mycpu_top(
                      .stall(IF_ID_reg_stall),
                      .flush(IF_ID_reg_flush),
 
-                     .valid_in(start),
+                     .valid_in(IF_ID_reg_valid_in),
                      .allow_in(IF_ID_reg_allow_in),
                      .allow_out(IF_ID_reg_allow_out),
                      .valid_out(IF_ID_reg_valid_out),
@@ -559,10 +553,14 @@ module mycpu_top(
                      .valid(MEM_WB_reg_valid)
                  );
 
-
-    //
-    // IF Stage
-    //
+    // pre-IF
+    reg start;
+    always @(posedge clk) begin
+        if (reset)
+            start <= 0;
+        else
+            start <= 1;
+    end
 
     pc pc(
            .clk(clk),
@@ -595,11 +593,15 @@ module mycpu_top(
                .out(next_pc_if_no_stall)
            );
 
-
     addr_trans addr_trans_inst(
                    .virt_addr(next_pc),
                    .phy_addr(inst_sram_addr)
                );
+
+
+    //
+    // IF Stage
+    //
 
     wire inst_addr_error = curr_pc_IF[1:0] != 2'b00;
     exception_combine inst_addr_error_exception(
