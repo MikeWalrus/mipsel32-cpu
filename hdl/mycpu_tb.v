@@ -33,11 +33,11 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 `timescale 1ns / 1ps
 
 `define TRACE_REF_FILE "golden_trace.txt"
-`define CONFREG_NUM_REG      soc_lite.confreg.num_data
-`define CONFREG_OPEN_TRACE   soc_lite.confreg.open_trace
-`define CONFREG_NUM_MONITOR  soc_lite.confreg.num_monitor
-`define CONFREG_UART_DISPLAY soc_lite.confreg.write_uart_valid
-`define CONFREG_UART_DATA    soc_lite.confreg.write_uart_data
+`define CONFREG_NUM_REG      soc_lite.u_confreg.num_data
+`define CONFREG_OPEN_TRACE   soc_lite.u_confreg.open_trace
+`define CONFREG_NUM_MONITOR  soc_lite.u_confreg.num_monitor
+`define CONFREG_UART_DISPLAY soc_lite.u_confreg.write_uart_valid
+`define CONFREG_UART_DATA    soc_lite.u_confreg.write_uart_data
 `define END_PC 32'hbfc00100
 
 module tb_top( );
@@ -69,22 +69,22 @@ module tb_top( );
         resetn = 1'b1;
     end
     always #5 clk=~clk;
-    soc_lite_top #(.SIMULATION(1'b1)) soc_lite
-                 (
-                     .resetn      (resetn     ),
-                     .clk         (clk        ),
+    soc_sram_lite_top #(.SIMULATION(1'b1)) soc_lite
+                      (
+                          .resetn      (resetn     ),
+                          .clk         (clk        ),
 
-                     //------gpio-------
-                     .num_csn    (num_csn    ),
-                     .num_a_g    (num_a_g    ),
-                     .led        (led        ),
-                     .led_rg0    (led_rg0    ),
-                     .led_rg1    (led_rg1    ),
-                     .switch     (switch     ),
-                     .btn_key_col(btn_key_col),
-                     .btn_key_row(btn_key_row),
-                     .btn_step   (btn_step   )
-                 );
+                          //------gpio-------
+                          .num_csn    (num_csn    ),
+                          .num_a_g    (num_a_g    ),
+                          .led        (led        ),
+                          .led_rg0    (led_rg0    ),
+                          .led_rg1    (led_rg1    ),
+                          .switch     (switch     ),
+                          .btn_key_col(btn_key_col),
+                          .btn_key_row(btn_key_row),
+                          .btn_step   (btn_step   )
+                      );
 
     //soc lite signals
     //"soc_clk" means clk in cpu

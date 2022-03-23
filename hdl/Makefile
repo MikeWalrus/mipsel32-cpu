@@ -5,7 +5,7 @@ TESTS := $(patsubst %.v, %_test, $(SRCS))
 all: sim
 
 sim: *.v
-	iverilog -Wall -o sim -DSIMULATION *.v BRIDGE/bridge_1x2.v CONFREG/confreg.v
+	iverilog -Wall -o sim -DIVERILOG -DSIMULATION *.v BRIDGE/bridge_1x2.v CONFREG/confreg.v
 
 .PHONY:
 
