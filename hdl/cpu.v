@@ -861,8 +861,8 @@ module mycpu_top(
                    .r1_data_ID_is_from_mem(rs_data_ID_is_from_mem),
                    .r1_data_ID_is_from_wb(rs_data_ID_is_from_wb),
                    .is_ID_EX_valid(ID_EX_reg_valid),
-                   .is_EX_MEM_valid(EX_MEM_reg_valid),
-                   .is_MEM_WB_valid(MEM_WB_reg_valid)
+                   .is_EX_MEM_valid(EX_MEM_reg_valid_out),
+                   .is_MEM_WB_valid(MEM_WB_reg_valid_out)
                );
     forwarding forwarding_rt(
                    .r1(rt),
