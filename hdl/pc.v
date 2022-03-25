@@ -9,7 +9,7 @@ module pc #
     );
     always @(posedge clk) begin
         if (reset)
-            out <= pc_reset - 4;
+            out <= pc_reset;
         else
             if (wen)
                 out <= next;

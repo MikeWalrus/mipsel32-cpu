@@ -11,7 +11,7 @@ module pipeline_reg #
         input flush,
 
         input valid_in,
-        output allow_in,
+        output reg allow_in,
         input allow_out,
         output valid_out,
         input [WIDTH-1:0] in,
@@ -19,7 +19,19 @@ module pipeline_reg #
         output reg valid
     );
     assign valid_out = valid & ~stall;
-    assign allow_in = ~valid | (~stall & allow_out) | flush;
+
+    always @(*) begin
+        if (flush)
+            allow_in = 1;
+        else begin
+            if (stall)
+                allow_in = 0;
+            else begin
+                allow_in = ~valid | allow_out;
+            end
+        end
+    end
+
     always @(posedge clk) begin
         if (reset) begin
             valid <= 0;

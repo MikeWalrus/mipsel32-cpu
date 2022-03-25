@@ -370,8 +370,13 @@ module mycpu_top(
     wire pre_IF_IF_reg_valid;
     wire pre_IF_IF_reg_allow_in;
 
-    wire pre_IF_IF_reg_flush = 0;
-    wire pre_IF_IF_reg_stall = ~inst_sram_addr_ok;
+    // As flush signals have higher priority over stall
+    // signals (see pipeline_reg.v),
+    // we shouldn't flush if IF hasn't got its data yet.
+    wire pre_IF_IF_reg_flush =
+         ~inst_sram_addr_ok & ~pre_IF_IF_reg_stall_wait_for_data;
+    wire pre_IF_IF_reg_stall_wait_for_data;
+    wire pre_IF_IF_reg_stall = pre_IF_IF_reg_stall_wait_for_data;
 
     wire IF_ID_reg_valid_in = pre_IF_IF_reg_valid_out;
     wire IF_ID_reg_valid_out;
@@ -380,9 +385,7 @@ module mycpu_top(
     wire IF_ID_reg_flush;
 
     wire IF_ID_reg_stall_hazard;
-    wire IF_ID_reg_stall_wait_for_data;
-    wire IF_ID_reg_stall = 
-        |{IF_ID_reg_stall_hazard, IF_ID_reg_stall_wait_for_data};
+    wire IF_ID_reg_stall = IF_ID_reg_stall_hazard;
 
     wire ID_EX_reg_valid_in = IF_ID_reg_valid_out;
     wire ID_EX_reg_valid_out;
@@ -458,7 +461,7 @@ module mycpu_top(
             .valid_out(pre_IF_IF_reg_valid_out),
             .valid(pre_IF_IF_reg_valid),
 
-            .in(next_pc),
+            .in(curr_pc_pre_IF),
             .out(curr_pc_IF)
         );
 
@@ -605,8 +608,47 @@ module mycpu_top(
 
     assign inst_sram_size = 2'd2;
     assign inst_sram_wstrb = 4'b1111;
-    assign inst_sram_req = pre_IF_IF_reg_allow_out;
+
+    // TODO: Don't read inst mem if we don't know the branch result.
+    assign inst_sram_req = pre_IF_IF_reg_allow_in;
+
     assign inst_sram_wr = 1'b0;
+
+    wire pre_IF_valid = inst_sram_req & inst_sram_addr_ok;
+
+    // We misses the delay slot if:
+    wire delay_slot_miss =
+         // ID is really decoding some instruction,
+         IF_ID_reg_valid
+         // which is a jump or branch instruction,
+         & is_delay_slot_IF
+         // and the instruction in the delay slot
+         // is not currently in IF,
+         & !pre_IF_IF_reg_valid
+         // and we will jump or the branch is taken.
+         & !next_pc_is_next;
+
+    reg [31:0] target;
+    reg delay_slot_have_missed;
+    always @(posedge clk) begin
+        if (reset) begin
+            delay_slot_have_missed <= 0;
+        end
+        if (delay_slot_miss) begin
+            // We've missed the delay slot, so we request for the instruction
+            // of the delay slot in this cycle, and request for the
+            // instruction of the target in the next cycle.
+            target <= next_pc;
+            delay_slot_have_missed <= 1;
+        end else begin
+            if (delay_slot_have_missed && pre_IF_valid) begin
+                delay_slot_have_missed <= 0;
+            end
+        end
+    end
+
+    wire [31:0] curr_pc_pre_IF = delay_slot_miss ? curr_pc_IF + 4 :
+         pre_IF_valid ? (delay_slot_have_missed ? target : next_pc) : curr_pc_IF;
 
     mux_1h #(.num_port(6)) next_pc_mux(
                .select(
@@ -631,7 +673,7 @@ module mycpu_top(
            );
 
     addr_trans addr_trans_inst(
-                   .virt_addr(next_pc),
+                   .virt_addr(curr_pc_pre_IF),
                    .phy_addr(inst_sram_addr)
                );
 
@@ -640,7 +682,8 @@ module mycpu_top(
     // IF Stage
     //
 
-    assign IF_ID_reg_stall_wait_for_data = ~inst_sram_data_ok;
+    assign pre_IF_IF_reg_stall_wait_for_data =
+           ~inst_sram_data_ok & pre_IF_IF_reg_valid;
 
     wire inst_addr_error = curr_pc_IF[1:0] != 2'b00;
     exception_combine inst_addr_error_exception(
@@ -909,16 +952,16 @@ module mycpu_top(
                           .exccode_out(exccode_ID)
                       );
 
-
-    //
-    // EX Stage
-    //
-
     branch_target_gen branch_target_gen(
                           .pc(curr_pc_IF),
                           .offset(inst_imm),
                           .target(branch_target)
                       );
+
+
+    //
+    // EX Stage
+    //
 
     wire [31:0] alu_result;
     wire overflow;
