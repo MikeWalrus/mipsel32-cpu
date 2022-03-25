@@ -364,15 +364,25 @@ module mycpu_top(
 
 
     // pipeline registers control signals
-    wire pre_IF_valid_out = start;
+    wire pre_IF_IF_reg_valid_in = ~reset;
+    wire pre_IF_IF_reg_valid_out;
+    wire pre_IF_IF_reg_allow_out;
+    wire pre_IF_IF_reg_valid;
+    wire pre_IF_IF_reg_allow_in;
 
-    wire IF_ID_reg_valid_in = pre_IF_valid_out;
+    wire pre_IF_IF_reg_flush = 0;
+    wire pre_IF_IF_reg_stall = ~inst_sram_addr_ok;
+
+    wire IF_ID_reg_valid_in = pre_IF_IF_reg_valid_out;
     wire IF_ID_reg_valid_out;
     wire IF_ID_reg_allow_out;
-    wire IF_ID_reg_stall;
     wire IF_ID_reg_valid;
-    wire IF_ID_reg_allow_in;
     wire IF_ID_reg_flush;
+
+    wire IF_ID_reg_stall_hazard;
+    wire IF_ID_reg_stall_wait_for_data;
+    wire IF_ID_reg_stall = 
+        |{IF_ID_reg_stall_hazard, IF_ID_reg_stall_wait_for_data};
 
     wire ID_EX_reg_valid_in = IF_ID_reg_valid_out;
     wire ID_EX_reg_valid_out;
@@ -430,6 +440,28 @@ module mycpu_top(
     wire eret_ID;
 
     // pipeline registers
+    pipeline_reg
+        #(
+            .WIDTH(32),
+            .RESET(1),
+            .RESET_VALUE(32'hBFC0_0000 - 32'd4)
+        )
+        pre_IF_IF_reg(
+            .clk(clk),
+            .reset(reset),
+            .stall(pre_IF_IF_reg_stall),
+            .flush(pre_IF_IF_reg_flush),
+
+            .valid_in(pre_IF_IF_reg_valid_in),
+            .allow_in(pre_IF_IF_reg_allow_in),
+            .allow_out(pre_IF_IF_reg_allow_out),
+            .valid_out(pre_IF_IF_reg_valid_out),
+            .valid(pre_IF_IF_reg_valid),
+
+            .in(next_pc),
+            .out(curr_pc_IF)
+        );
+
     pipeline_reg #(.WIDTH(32 + 32 + 1 + 1 + 5 + 32)) IF_ID_reg(
                      .clk(clk),
                      .reset(reset),
@@ -437,9 +469,9 @@ module mycpu_top(
                      .flush(IF_ID_reg_flush),
 
                      .valid_in(IF_ID_reg_valid_in),
-                     .allow_in(IF_ID_reg_allow_in),
-                     .allow_out(IF_ID_reg_allow_out),
+                     .allow_in(pre_IF_IF_reg_allow_out),
                      .valid_out(IF_ID_reg_valid_out),
+                     .allow_out(IF_ID_reg_allow_out),
                      .in(
                          {
                              curr_pc_IF,
@@ -567,24 +599,15 @@ module mycpu_top(
                      .valid(MEM_WB_reg_valid)
                  );
 
-    // pre-IF
-    reg start;
-    always @(posedge clk) begin
-        if (reset)
-            start <= 0;
-        else
-            start <= 1;
-    end
+    //
+    // pre-IF Stage
+    //
 
-    pc pc(
-           .clk(clk),
-           .reset(reset),
-           .next(next_pc),
-           .out(curr_pc_IF)
-       );
+    assign inst_sram_size = 2'd2;
+    assign inst_sram_wstrb = 4'b1111;
+    assign inst_sram_req = pre_IF_IF_reg_allow_out;
+    assign inst_sram_wr = 1'b0;
 
-    wire [31:0] next_pc_if_no_stall;
-    assign next_pc = IF_ID_reg_allow_in ? next_pc_if_no_stall : curr_pc_IF;
     mux_1h #(.num_port(6)) next_pc_mux(
                .select(
                    {
@@ -604,7 +627,7 @@ module mycpu_top(
                        32'hbfc00380,
                        cp0_epc
                    }),
-               .out(next_pc_if_no_stall)
+               .out(next_pc)
            );
 
     addr_trans addr_trans_inst(
@@ -616,6 +639,8 @@ module mycpu_top(
     //
     // IF Stage
     //
+
+    assign IF_ID_reg_stall_wait_for_data = ~inst_sram_data_ok;
 
     wire inst_addr_error = curr_pc_IF[1:0] != 2'b00;
     exception_combine inst_addr_error_exception(
@@ -822,7 +847,7 @@ module mycpu_top(
                       .rt_data_ID_is_from_ex(rt_data_ID_is_from_ex),
                       .rs_data_ID_is_from_mem(rs_data_ID_is_from_mem),
                       .rt_data_ID_is_from_mem(rt_data_ID_is_from_mem),
-                      .IF_ID_reg_stall(IF_ID_reg_stall)
+                      .IF_ID_reg_stall(IF_ID_reg_stall_hazard)
                   );
 
     wire exc_interrupt;

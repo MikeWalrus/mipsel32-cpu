@@ -3,6 +3,7 @@ module pc #
     (
         input clk,
         input reset,
+        input wen,
         input [31:0] next,
         output reg [31:0] out
     );
@@ -10,6 +11,7 @@ module pc #
         if (reset)
             out <= pc_reset - 4;
         else
-            out <= next;
+            if (wen)
+                out <= next;
     end
 endmodule
