@@ -38,10 +38,14 @@ module mycpu_top(
     assign reset = ~resetn;
     assign inst_sram_en = 1;
 
+    wire mem_en_ID;
+    wire mem_en_EX;
     wire mem_wen_ID;
     wire mem_wen_EX;
+    wire data_sram_req_MEM;
 
     // pc
+    reg [31:0] curr_pc_pre_IF;
     wire [31:0] curr_pc_IF;
     wire [31:0] curr_pc_ID;
     wire [31:0] curr_pc_EX;
@@ -50,7 +54,7 @@ module mycpu_top(
 
 
     // instruction
-    wire [31:0] instruction_IF = inst_sram_rdata;
+    wire [31:0] instruction_IF;
     wire [31:0] instruction_ID;
     wire [5:0] opcode;
     wire [4:0] rs;
@@ -364,17 +368,20 @@ module mycpu_top(
 
 
     // pipeline registers control signals
-    wire pre_IF_IF_reg_valid_in = ~reset;
+    wire _pre_IF_reg_valid_in = ~reset;
+    wire _pre_IF_reg_valid_out;
+    wire _pre_IF_reg_allow_out;
+    wire _pre_IF_reg_valid;
+    wire _pre_IF_reg_allow_in;
+    wire _pre_IF_reg_stall;
+    wire _pre_IF_reg_flush = 0;
+
+    wire pre_IF_IF_reg_valid_in = _pre_IF_reg_valid_out;
     wire pre_IF_IF_reg_valid_out;
     wire pre_IF_IF_reg_allow_out;
     wire pre_IF_IF_reg_valid;
-    wire pre_IF_IF_reg_allow_in;
 
-    // As flush signals have higher priority over stall
-    // signals (see pipeline_reg.v),
-    // we shouldn't flush if IF hasn't got its data yet.
-    wire pre_IF_IF_reg_flush =
-         ~inst_sram_addr_ok & ~pre_IF_IF_reg_stall_wait_for_data;
+    wire pre_IF_IF_reg_flush = 0;
     wire pre_IF_IF_reg_stall_wait_for_data;
     wire pre_IF_IF_reg_stall = pre_IF_IF_reg_stall_wait_for_data;
 
@@ -390,16 +397,22 @@ module mycpu_top(
     wire ID_EX_reg_valid_in = IF_ID_reg_valid_out;
     wire ID_EX_reg_valid_out;
     wire ID_EX_reg_allow_out;
-    wire ID_EX_reg_stall;
     wire ID_EX_reg_valid;
     wire ID_EX_reg_flush;
+
+    wire ID_EX_reg_stall_mem_not_ready;
+    wire ID_EX_reg_stall_div_not_complete;
+    wire ID_EX_reg_stall =
+         |{ID_EX_reg_stall_mem_not_ready, ID_EX_reg_stall_div_not_complete};
 
     wire EX_MEM_reg_valid_in = ID_EX_reg_valid_out;
     wire EX_MEM_reg_valid_out;
     wire EX_MEM_reg_allow_out;
-    wire EX_MEM_reg_stall = 0;
     wire EX_MEM_reg_valid;
     wire EX_MEM_reg_flush;
+
+    wire EX_MEM_reg_stall_wait_for_data;
+    wire EX_MEM_reg_stall = EX_MEM_reg_stall_wait_for_data;
 
     wire MEM_WB_reg_valid_in = EX_MEM_reg_valid_out;
     wire MEM_WB_reg_valid_out;
@@ -445,6 +458,23 @@ module mycpu_top(
     // pipeline registers
     pipeline_reg
         #(
+            .WIDTH(0)
+        )
+        _pre_IF_reg(
+            .clk(clk),
+            .reset(reset),
+            .stall(_pre_IF_reg_stall),
+            .flush(_pre_IF_reg_flush),
+
+            .valid_in(_pre_IF_reg_valid_in),
+            .allow_in(_pre_IF_reg_allow_in),
+            .allow_out(_pre_IF_reg_allow_out),
+            .valid_out(_pre_IF_reg_valid_out),
+            .valid(_pre_IF_reg_valid)
+        );
+
+    pipeline_reg
+        #(
             .WIDTH(32),
             .RESET(1),
             .RESET_VALUE(32'hBFC0_0000 - 32'd4)
@@ -456,7 +486,7 @@ module mycpu_top(
             .flush(pre_IF_IF_reg_flush),
 
             .valid_in(pre_IF_IF_reg_valid_in),
-            .allow_in(pre_IF_IF_reg_allow_in),
+            .allow_in(_pre_IF_reg_allow_out),
             .allow_out(pre_IF_IF_reg_allow_out),
             .valid_out(pre_IF_IF_reg_valid_out),
             .valid(pre_IF_IF_reg_valid),
@@ -497,10 +527,10 @@ module mycpu_top(
                  );
 
     pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 +
-                          19 + 8 + 1 +
+                          19 + 8 +
                           5 + 9 + 7 +
                           8 + 1 + 5 +
-                          32
+                          32 + 1 + 1
                          ))
                  ID_EX_reg(
                      .clk(clk),
@@ -515,18 +545,18 @@ module mycpu_top(
                      .in(
                          {
                              curr_pc_ID, rs_data_ID, rt_data_ID, imm_ID,
-                             alu_ctrl_ID, reg_write_sig_ID, mem_wen_ID,
+                             alu_ctrl_ID, reg_write_sig_ID,
                              shamt_ID, mult_div_ctrl_ID, mem_ctrl_ID,
                              cp0_signals_ID, exception_ID, exccode_ID,
-                             badvaddr_ID
+                             badvaddr_ID, mem_en_ID, mem_wen_ID
                          }),
                      .out(
                          {
                              curr_pc_EX, rs_data_EX, rt_data_EX, imm_EX,
-                             alu_ctrl_EX, reg_write_sig_EX, mem_wen_EX,
+                             alu_ctrl_EX, reg_write_sig_EX,
                              shamt_EX, mult_div_ctrl_EX, mem_ctrl_EX,
                              cp0_signals_EX, exception_EX_old, exccode_EX_old,
-                             badvaddr_EX_old
+                             badvaddr_EX_old, mem_en_EX, mem_wen_EX
                          }),
                      .valid(ID_EX_reg_valid)
                  );
@@ -536,7 +566,8 @@ module mycpu_top(
                           7 + 32 +
                           8 +
                           1 + 5 +
-                          32))
+                          32 +
+                          1))
                  EX_MEM_reg(
                      .clk(clk),
                      .reset(reset),
@@ -554,7 +585,8 @@ module mycpu_top(
                              mem_ctrl_EX, rt_data_EX,
                              cp0_signals_EX,
                              exception_EX, exccode_EX,
-                             badvaddr_EX
+                             badvaddr_EX,
+                             data_sram_req
                          }),
                      .out(
                          {
@@ -563,7 +595,8 @@ module mycpu_top(
                              mem_ctrl_MEM, rt_data_MEM,
                              cp0_signals_MEM,
                              exception_MEM_old, exccode_MEM_old,
-                             badvaddr_MEM
+                             badvaddr_MEM,
+                             data_sram_req_MEM
                          }),
                      .valid(EX_MEM_reg_valid)
                  );
@@ -609,46 +642,64 @@ module mycpu_top(
     assign inst_sram_size = 2'd2;
     assign inst_sram_wstrb = 4'b1111;
 
-    // TODO: Don't read inst mem if we don't know the branch result.
-    assign inst_sram_req = pre_IF_IF_reg_allow_in;
+    assign inst_sram_req = _pre_IF_reg_valid & _pre_IF_reg_allow_out;
 
     assign inst_sram_wr = 1'b0;
 
-    wire pre_IF_valid = inst_sram_req & inst_sram_addr_ok;
+    assign _pre_IF_reg_stall = inst_sram_req & ~inst_sram_addr_ok;
 
     // We misses the delay slot if:
     wire delay_slot_miss =
-         // ID is really decoding some instruction,
-         IF_ID_reg_valid
-         // which is a jump or branch instruction,
-         & is_delay_slot_IF
-         // and the instruction in the delay slot
-         // is not currently in IF,
-         & !pre_IF_IF_reg_valid
-         // and we will jump or the branch is taken.
-         & !next_pc_is_next;
+         ~next_pc_is_next & ~pre_IF_IF_reg_valid;
+
+    wire leaving_pre_IF = _pre_IF_reg_valid_out && _pre_IF_reg_allow_out;
 
     reg [31:0] target;
-    reg delay_slot_have_missed;
+    reg use_target;
     always @(posedge clk) begin
         if (reset) begin
-            delay_slot_have_missed <= 0;
+            use_target <= 0;
         end
-        if (delay_slot_miss) begin
-            // We've missed the delay slot, so we request for the instruction
-            // of the delay slot in this cycle, and request for the
-            // instruction of the target in the next cycle.
+        if (IF_ID_reg_valid_out & !next_pc_is_next) begin
             target <= next_pc;
-            delay_slot_have_missed <= 1;
+            if (pre_IF_IF_reg_valid & leaving_pre_IF)
+                use_target <= 0; // haven't missed the delay slot
+            else// if (!pre_IF_IF_reg_valid) begin
+                use_target <= 1;
+            //end
         end else begin
-            if (delay_slot_have_missed && pre_IF_valid) begin
-                delay_slot_have_missed <= 0;
+            if (use_target && !delay_slot_have_missed && leaving_pre_IF) begin
+                use_target <= 0;
             end
         end
     end
 
-    wire [31:0] curr_pc_pre_IF = delay_slot_miss ? curr_pc_IF + 4 :
-         pre_IF_valid ? (delay_slot_have_missed ? target : next_pc) : curr_pc_IF;
+
+    reg delay_slot_have_missed;
+    always @(posedge clk) begin
+        if (reset) begin
+            delay_slot_have_missed <= 0;
+        end else if (delay_slot_miss && !leaving_pre_IF) begin
+            delay_slot_have_missed <= 1;
+        end else if (delay_slot_have_missed && leaving_pre_IF) begin
+            delay_slot_have_missed <= 0;
+        end
+    end
+
+    always @(*) begin
+        if (delay_slot_miss || delay_slot_have_missed)
+            // We've missed the delay slot, so we request for the instruction
+            // of the delay slot in this cycle, and request for the
+            // instruction of the target in the next cycle.
+            curr_pc_pre_IF = curr_pc_IF + 4;
+        else if (_pre_IF_reg_valid_out & _pre_IF_reg_allow_out) begin
+            if (use_target)
+                curr_pc_pre_IF = target;
+            else
+                curr_pc_pre_IF = next_pc;
+        end else
+            curr_pc_pre_IF = curr_pc_IF;
+    end
 
     mux_1h #(.num_port(6)) next_pc_mux(
                .select(
@@ -682,8 +733,30 @@ module mycpu_top(
     // IF Stage
     //
 
+    reg [31:0] instruction_latched;
+    reg instruction_latched_valid;
+    always @(posedge clk) begin
+        if (pre_IF_IF_reg_valid & inst_sram_data_ok) begin
+            if (!pre_IF_IF_reg_allow_out) begin
+                instruction_latched <= inst_sram_rdata;
+                instruction_latched_valid <= 1;
+            end else
+                instruction_latched_valid <= 0;
+        end else
+            if (instruction_latched_valid &
+                    IF_ID_reg_allow_out & IF_ID_reg_valid_out)
+                instruction_latched_valid <= 0;
+    end
+
+    wire instruction_not_available =
+         ~inst_sram_data_ok & pre_IF_IF_reg_valid;
+
+    assign instruction_IF =
+           instruction_not_available & instruction_latched_valid ?
+           instruction_latched : inst_sram_rdata;
+
     assign pre_IF_IF_reg_stall_wait_for_data =
-           ~inst_sram_data_ok & pre_IF_IF_reg_valid;
+           instruction_not_available & ~instruction_latched_valid;
 
     wire inst_addr_error = curr_pc_IF[1:0] != 2'b00;
     exception_combine inst_addr_error_exception(
@@ -762,7 +835,7 @@ module mycpu_top(
                 .mem_wl(mem_wl_ID),
                 .mem_wr(mem_wr_ID),
 
-                .data_sram_en(data_sram_en),
+                .mem_en(mem_en_ID),
                 .mem_wen(mem_wen_ID),
 
                 .reg_write(reg_write_ID),
@@ -861,8 +934,8 @@ module mycpu_top(
                    .r1_data_ID_is_from_mem(rs_data_ID_is_from_mem),
                    .r1_data_ID_is_from_wb(rs_data_ID_is_from_wb),
                    .is_ID_EX_valid(ID_EX_reg_valid),
-                   .is_EX_MEM_valid(EX_MEM_reg_valid_out),
-                   .is_MEM_WB_valid(MEM_WB_reg_valid_out)
+                   .is_EX_MEM_valid(EX_MEM_reg_valid),
+                   .is_MEM_WB_valid(MEM_WB_reg_valid)
                );
     forwarding forwarding_rt(
                    .r1(rt),
@@ -882,6 +955,7 @@ module mycpu_top(
                );
 
     hazard_detect hazard_detect(
+                      .en(IF_ID_reg_valid),
                       .reg_write_is_mem_EX(reg_write_is_mem_EX),
                       .mfc0_EX(mfc0_EX),
                       .mfc0_MEM(mfc0_MEM),
@@ -953,7 +1027,9 @@ module mycpu_top(
                       );
 
     branch_target_gen branch_target_gen(
-                          .pc(curr_pc_IF),
+                          // Use curr_pc_ID to calculate curr_pc_IF,
+                          // as curr_pc_IF may not be valid now.
+                          .pc(curr_pc_ID + 32'd4),
                           .offset(inst_imm),
                           .target(branch_target)
                       );
@@ -1008,7 +1084,7 @@ module mycpu_top(
                       );
 
     wire mult_div_complete;
-    assign ID_EX_reg_stall = ~mult_div_complete;
+    assign ID_EX_reg_stall_div_not_complete = ~mult_div_complete;
     wire [31:0] hi;
     wire [31:0] lo;
     mult_div mult_div(
@@ -1033,6 +1109,18 @@ module mycpu_top(
                .in(    {alu_result      , lo             , hi             }),
                .out(result_EX)
            );
+
+    assign data_sram_req = ID_EX_reg_valid
+           & (mem_en_EX | mem_wen_EX)
+           // avoid sending multiple requests when stalling
+           & ID_EX_reg_allow_out;
+    assign data_sram_size =
+           ({2{mem_w_EX}} & 2'd2)
+           | ({2{mem_h_EX}} & 2'd1)
+           | ({2{mem_b_EX}} & 2'd0);
+    assign data_sram_wr = mem_wen_EX;
+    assign ID_EX_reg_stall_mem_not_ready =
+           ~data_sram_addr_ok & data_sram_req;
 
     addr_trans addr_trans_data(
                    .virt_addr(result_EX),
@@ -1072,7 +1160,7 @@ module mycpu_top(
                     .write_w(mem_w_EX),
                     .swl(mem_wl_EX),
                     .swr(mem_wr_EX),
-                    .wen_4b(data_sram_wen)
+                    .wen_4b(data_sram_wstrb)
                 );
 
     mem_write_data_gen mem_write_data_gen(
@@ -1089,6 +1177,9 @@ module mycpu_top(
     //
     // MEM Stage
     //
+
+    assign EX_MEM_reg_stall_wait_for_data =
+           data_sram_req_MEM & EX_MEM_reg_valid & ~data_sram_data_ok;
 
     mem_read mem_read(
                  .data_sram_rdata(data_sram_rdata),

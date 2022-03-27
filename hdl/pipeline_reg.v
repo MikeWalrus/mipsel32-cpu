@@ -27,7 +27,7 @@ module pipeline_reg #
             if (stall)
                 allow_in = 0;
             else begin
-                allow_in = ~valid | allow_out;
+                allow_in = allow_out | ~valid;
             end
         end
     end

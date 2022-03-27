@@ -58,11 +58,11 @@ module sram_wrap(
     );
     //mask
 `ifdef RUN_PERF_TEST
-    assign addr_and = 1'b1;
-    assign data_and = 1'b1;
+    wire addr_and = 1'b1;
+    wire data_and = 1'b1;
 `else
-    assign addr_and = ram_random_mask[1];
-    assign data_and = ram_random_mask[0];
+    wire addr_and = ram_random_mask[1];
+    wire data_and = ram_random_mask[0];
 `endif
 
     //to ram

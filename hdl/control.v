@@ -51,7 +51,7 @@ module control(
         output mem_wl,
         output mem_wr,
 
-        output data_sram_en,
+        output mem_en,
         output mem_wen,
 
         output reg_write,
@@ -166,8 +166,6 @@ module control(
            is_store | is_load | imm_arith;
     assign alu_b_is_8       = link;
 
-    assign data_sram_en = 1;
-
     wire branch_take;
     wire is_branch;
     branch_ctrl branch_ctrl(
@@ -274,6 +272,7 @@ module control(
     assign mem_wr = is_swr | is_lwr;
 
     assign mem_wen = is_store;
+    assign mem_en = is_load;
 
     // exception
     assign exc_syscall = is_R_type & func_syscall;
