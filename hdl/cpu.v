@@ -1114,7 +1114,33 @@ module mycpu_top(
            & (mem_en_EX | mem_wen_EX)
            // avoid sending multiple requests when stalling
            & ID_EX_reg_allow_out;
+
+    reg [2:0] wstrb_count;
+    integer i;
+    always @(*) begin
+        wstrb_count = 0;
+        for (i = 0; i < 4; i = i + 1) begin
+            wstrb_count = wstrb_count + {2'b0, data_sram_wstrb[i]};
+        end
+    end
+    reg [1:0] w_size;
+    always @(*) begin
+        case(wstrb_count)
+            3'd1:
+                w_size = 0;
+            3'd2:
+                w_size = 1;
+            3'd3:
+                w_size = 2;
+            3'd4:
+                w_size = 2;
+            default:
+                w_size = 2'bxx;
+        endcase
+    end
+
     assign data_sram_size =
+           data_sram_wr ? w_size :
            ({2{mem_w_EX}} & 2'd2)
            | ({2{mem_h_EX}} & 2'd1)
            | ({2{mem_b_EX}} & 2'd0);
@@ -1148,20 +1174,20 @@ module mycpu_top(
                           .exccode_out(exccode_EX)
                       );
 
-    mem_wen_gen mem_wen_gen(
-                    .byte_offset(byte_offset_EX),
-                    .wen_1b(
-                        &{mem_wen_EX,
-                          ID_EX_reg_valid,
-                          ~exception_EX_MEM_WB
-                         }),
-                    .write_b(mem_b_EX),
-                    .write_h(mem_h_EX),
-                    .write_w(mem_w_EX),
-                    .swl(mem_wl_EX),
-                    .swr(mem_wr_EX),
-                    .wen_4b(data_sram_wstrb)
-                );
+    mem_wstrb_gen mem_wstrb_gen(
+                      .byte_offset(byte_offset_EX),
+                      .wen_1b(
+                          &{mem_wen_EX,
+                            ID_EX_reg_valid,
+                            ~exception_EX_MEM_WB
+                           }),
+                      .write_b(mem_b_EX),
+                      .write_h(mem_h_EX),
+                      .write_w(mem_w_EX),
+                      .swl(mem_wl_EX),
+                      .swr(mem_wr_EX),
+                      .wstrb(data_sram_wstrb)
+                  );
 
     mem_write_data_gen mem_write_data_gen(
                            .data(rt_data_EX),

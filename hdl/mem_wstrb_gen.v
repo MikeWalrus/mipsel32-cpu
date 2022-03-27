@@ -1,4 +1,4 @@
-module mem_wen_gen(
+module mem_wstrb_gen(
         input [1:0] byte_offset,
         input wen_1b,
         input write_b,
@@ -6,7 +6,7 @@ module mem_wen_gen(
         input write_w,
         input swl,
         input swr,
-        output reg [3:0] wen_4b
+        output reg [3:0] wstrb
     );
     wire halfword_offset = byte_offset[1];
 
@@ -29,20 +29,20 @@ module mem_wen_gen(
 
     always @(*) begin
         if (wen_1b) begin
-            wen_4b = {4{1'b0}};
+            wstrb = {4{1'b0}};
             if (write_b) begin
-                wen_4b[byte_offset] = 1'b1;
+                wstrb[byte_offset] = 1'b1;
             end else if (write_h) begin
-                wen_4b[halfword_offset*2 +: 2] = 2'b11;
+                wstrb[halfword_offset*2 +: 2] = 2'b11;
             end else if (write_w) begin
-                wen_4b = 4'b1111;
+                wstrb = 4'b1111;
             end else if (swl) begin
-                wen_4b = swl_wen[byte_offset];
+                wstrb = swl_wen[byte_offset];
             end else if (swr) begin
-                wen_4b = swr_wen[byte_offset];
+                wstrb = swr_wen[byte_offset];
             end
         end else begin
-            wen_4b = {4{1'b0}};
+            wstrb = {4{1'b0}};
         end
     end
 endmodule
