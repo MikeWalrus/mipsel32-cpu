@@ -38,12 +38,12 @@ module mycpu_top(
     wire data_sram_req_MEM;
 
     // pc
-    reg [31:0] curr_pc_pre_IF;
+    wire [31:0] curr_pc_pre_IF;
     wire [31:0] curr_pc_IF;
     wire [31:0] curr_pc_ID;
     wire [31:0] curr_pc_EX;
     wire [31:0] curr_pc_MEM;
-    (*MARK_DEBUG = "true"*) wire [31:0] curr_pc_WB;
+    wire [31:0] curr_pc_WB;
 
 
     // instruction
@@ -75,13 +75,14 @@ module mycpu_top(
     wire [31:0] rt_data_WB;
 
     // control transfer
-    wire [31:0] next_pc;
     wire branch_or_jump_ID;
 
     wire next_pc_is_next;
     wire next_pc_is_branch_target;
     wire next_pc_is_jal_target;
     wire next_pc_is_jr_target;
+
+    wire [31:0] next_pc_without_exception;
 
     wire [31:0] jr_target = rs_data_ID; // jr, jalr
     wire [31:0] branch_target;          // b*
@@ -446,7 +447,6 @@ module mycpu_top(
     wire [4:0] exccode_MEM_old; // from EX
     wire [4:0] exccode_WB_old; // from MEM
 
-    // TODO: remove this and actually implement these exceptions
     assign exception_MEM = exception_MEM_old;
     assign exception_WB = exception_WB_old;
     assign exccode_MEM = exccode_MEM_old;
@@ -642,93 +642,50 @@ module mycpu_top(
     // pre-IF Stage
     //
 
-    assign inst_sram_size = 2'd2;
-    assign inst_sram_wstrb = 4'b1111;
+    pre_IF pre_IF(
+               .clk(clk),
+               .reset(reset),
 
-    assign inst_sram_req =
-           _pre_IF_reg_valid & _pre_IF_reg_allow_out & !exception_or_eret_now;
+               .inst_sram_req(inst_sram_req),
+               .inst_sram_wr(inst_sram_wr),
+               .inst_sram_size(inst_sram_size),
+               .inst_sram_wstrb(inst_sram_wstrb),
+               .inst_sram_addr(inst_sram_addr),
+               .inst_sram_wdata(inst_sram_wdata),
+               .inst_sram_addr_ok(inst_sram_addr_ok),
+               .inst_sram_data_ok(inst_sram_data_ok),
 
-    assign inst_sram_wr = 1'b0;
+               ._pre_IF_reg_valid(_pre_IF_reg_valid),
+               ._pre_IF_reg_allow_out(_pre_IF_reg_allow_out),
+               ._pre_IF_reg_stall(_pre_IF_reg_stall),
+               .leaving_pre_IF(leaving_pre_IF),
 
-    assign _pre_IF_reg_stall = inst_sram_req & ~inst_sram_addr_ok;
+               .pre_IF_IF_reg_valid(pre_IF_IF_reg_valid),
+               .pre_IF_IF_reg_stall_wait_for_data(
+                   pre_IF_IF_reg_stall_wait_for_data
+               ),
+               .pre_IF_IF_reg_stall_discard_instruction(
+                   pre_IF_IF_reg_stall_discard_instruction
+               ),
 
-    // We misses the delay slot if:
-    wire delay_slot_miss =
-         ~next_pc_is_next & ~pre_IF_IF_reg_valid;
+               .IF_ID_reg_valid_out(IF_ID_reg_valid_out),
 
-    reg [31:0] target;
-    reg use_target;
-    always @(posedge clk) begin
-        if (reset) begin
-            use_target <= 0;
-        end
-        if (IF_ID_reg_valid_out & !next_pc_is_next) begin
-            target <= next_pc;
-            if (pre_IF_IF_reg_valid & leaving_pre_IF)
-                use_target <= 0; // haven't missed the delay slot
-            else
-                use_target <= 1;
-        end else begin
-            if (use_target && !delay_slot_have_missed && leaving_pre_IF) begin
-                use_target <= 0;
-            end
-        end
-    end
+               .exception_or_eret_now(exception_or_eret_now),
+               .exception_now_pre_IF(exception_now_pre_IF),
+               .eret_now_pre_IF(eret_now_pre_IF),
+               .cp0_epc(cp0_epc),
 
-    reg delay_slot_have_missed;
-    always @(posedge clk) begin
-        if (reset) begin
-            delay_slot_have_missed <= 0;
-        end else if (delay_slot_miss && !leaving_pre_IF) begin
-            delay_slot_have_missed <= 1;
-        end else if (delay_slot_have_missed && leaving_pre_IF) begin
-            delay_slot_have_missed <= 0;
-        end
-    end
+               .next_pc_is_next(next_pc_is_next),
 
-    wire should_discard_instruction =
-         exception_or_eret_now & (
-             // the address is accepted in pre-IF
-             (inst_sram_req & inst_sram_addr_ok)
-             || // or
-             // IF is waiting for data
-             pre_IF_IF_reg_stall_wait_for_data
-         );
+               .next_pc_without_exception(next_pc_without_exception),
+               .curr_pc_IF(curr_pc_IF),
+               .curr_pc_pre_IF(curr_pc_pre_IF)
+           );
 
-    reg discard_instruction;
-    always @(posedge clk) begin
-        if (reset) begin
-            discard_instruction <= 0;
-        end begin
-            if (should_discard_instruction) begin
-                discard_instruction <= 1;
-            end else if (inst_sram_data_ok) begin
-                // If an unwanted instruction needs to be discarded,
-                // it has been discarded.
-                discard_instruction <= 0;
-            end
-        end
-    end
-    assign pre_IF_IF_reg_stall_discard_instruction = discard_instruction;
 
-    always @(*) begin
-        if (exception_now_pre_IF)
-            curr_pc_pre_IF = 32'hBFC0_0380;
-        else if (eret_now_pre_IF)
-            curr_pc_pre_IF = cp0_epc;
-        else if (delay_slot_miss || delay_slot_have_missed)
-            // We've missed the delay slot, so we request for the instruction
-            // of the delay slot in this cycle, and request for the
-            // instruction of the target in the next cycle.
-            curr_pc_pre_IF = curr_pc_IF + 4;
-        else if (leaving_pre_IF) begin
-            if (use_target)
-                curr_pc_pre_IF = target;
-            else
-                curr_pc_pre_IF = next_pc;
-        end else
-            curr_pc_pre_IF = curr_pc_IF;
-    end
+    //
+    // IF Stage
+    //
 
     mux_1h #(.num_port(4)) next_pc_mux(
                .select(
@@ -745,18 +702,8 @@ module mycpu_top(
                        jal_target,
                        jr_target
                    }),
-               .out(next_pc)
+               .out(next_pc_without_exception)
            );
-
-    addr_trans addr_trans_inst(
-                   .virt_addr(curr_pc_pre_IF),
-                   .phy_addr(inst_sram_addr)
-               );
-
-
-    //
-    // IF Stage
-    //
 
     reg [31:0] instruction_latched;
     reg instruction_latched_valid;
@@ -1144,60 +1091,39 @@ module mycpu_top(
                .out(result_EX)
            );
 
-    assign data_sram_req = ID_EX_reg_valid
-           & (mem_en_EX | mem_wen_EX)
-           // avoid sending multiple requests when stalling:
-           & ID_EX_reg_allow_out
-           // avoid sending request when exceptions have happened:
-           & ~exception_EX_MEM_WB;
-
-    reg [2:0] wstrb_count;
-    integer i;
-    always @(*) begin
-        wstrb_count = 0;
-        for (i = 0; i < 4; i = i + 1) begin
-            wstrb_count = wstrb_count + {2'b0, data_sram_wstrb[i]};
-        end
-    end
-    reg [1:0] w_size;
-    always @(*) begin
-        case(wstrb_count)
-            3'd1:
-                w_size = 0;
-            3'd2:
-                w_size = 1;
-            3'd3:
-                w_size = 2;
-            3'd4:
-                w_size = 2;
-            default:
-                w_size = 2'bxx;
-        endcase
-    end
-
-    assign data_sram_size =
-           data_sram_wr ? w_size :
-           ({2{mem_w_EX}} & 2'd2)
-           | ({2{mem_h_EX}} & 2'd1)
-           | ({2{mem_b_EX}} & 2'd0);
-    assign data_sram_wr = mem_wen_EX;
-    assign ID_EX_reg_stall_mem_not_ready =
-           ~data_sram_addr_ok & data_sram_req;
-
-    addr_trans addr_trans_data(
-                   .virt_addr(result_EX),
-                   .phy_addr(data_sram_addr)
-               );
-    assign byte_offset_EX = data_sram_addr[1:0];
-
     wire mem_addr_unaligned;
-    mem_addr_check mem_addr_check(
-                       .w(mem_w_EX & ~mem_wl_EX & ~mem_wr_EX),
-                       .h(mem_h_EX | mem_hu_EX),
-                       .b(mem_b_EX | mem_bu_EX),
-                       .byte_offset(byte_offset_EX),
-                       .unaligned(mem_addr_unaligned)
-                   );
+    data_sram_request data_sram_request(
+                          .data_sram_req(data_sram_req),
+                          .data_sram_wr(data_sram_wr),
+                          .data_sram_size(data_sram_size),
+                          .data_sram_wstrb(data_sram_wstrb),
+                          .data_sram_addr(data_sram_addr),
+                          .data_sram_wdata(data_sram_wdata),
+                          .data_sram_addr_ok(data_sram_addr_ok),
+
+                          .mem_en_EX(mem_en_EX),
+                          .mem_wen_EX(mem_wen_EX),
+
+                          .data(rt_data_EX),
+                          .virt_addr(result_EX),
+
+                          .ID_EX_reg_valid(ID_EX_reg_valid),
+                          .ID_EX_reg_allow_out(ID_EX_reg_allow_out),
+                          .exception_EX_MEM_WB(exception_EX_MEM_WB),
+                          .mem_w_EX(mem_w_EX),
+                          .mem_h_EX(mem_h_EX),
+                          .mem_b_EX(mem_b_EX),
+                          .mem_hu_EX(mem_hu_EX),
+                          .mem_bu_EX(mem_bu_EX),
+                          .mem_wl_EX(mem_wl_EX),
+                          .mem_wr_EX(mem_wr_EX),
+
+                          .mem_addr_unaligned(mem_addr_unaligned),
+                          .ID_EX_reg_stall_mem_not_ready(
+                              ID_EX_reg_stall_mem_not_ready
+                          ),
+                          .byte_offset_EX(byte_offset_EX)
+                      );
 
     assign badvaddr_EX = exception_EX_old ? badvaddr_EX_old : alu_result;
 
@@ -1210,31 +1136,6 @@ module mycpu_top(
                           .exccode_out(exccode_EX)
                       );
 
-    mem_wstrb_gen mem_wstrb_gen(
-                      .byte_offset(byte_offset_EX),
-                      .wen_1b(
-                          &{mem_wen_EX,
-                            ID_EX_reg_valid,
-                            ~exception_EX_MEM_WB
-                           }),
-                      .write_b(mem_b_EX),
-                      .write_h(mem_h_EX),
-                      .write_w(mem_w_EX),
-                      .swl(mem_wl_EX),
-                      .swr(mem_wr_EX),
-                      .wstrb(data_sram_wstrb)
-                  );
-
-    mem_write_data_gen mem_write_data_gen(
-                           .data(rt_data_EX),
-                           .write_b(mem_b_EX),
-                           .write_h(mem_h_EX),
-                           .write_w(mem_w_EX),
-                           .swl(mem_wl_EX),
-                           .swr(mem_wr_EX),
-                           .byte_offset(byte_offset_EX),
-                           .mem_write_data(data_sram_wdata)
-                       );
 
     //
     // MEM Stage
