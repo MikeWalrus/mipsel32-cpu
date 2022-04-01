@@ -76,6 +76,7 @@ module mycpu_top(
 
     // control transfer
     wire [31:0] next_pc;
+    wire branch_or_jump_ID;
 
     wire next_pc_is_next;
     wire next_pc_is_branch_target;
@@ -88,8 +89,7 @@ module mycpu_top(
          {curr_pc_IF[31:28] ,instruction_ID[25:0], {2{1'b0}}};
     wire [31:0] cp0_epc;
 
-    wire is_delay_slot_IF;
-    wire is_delay_slot_ID;
+    reg is_delay_slot_ID;
     wire is_delay_slot_WB;
 
     // signals that choose the result
@@ -369,6 +369,7 @@ module mycpu_top(
     wire _pre_IF_reg_allow_in;
     wire _pre_IF_reg_stall;
     wire _pre_IF_reg_flush = 0;
+    wire leaving_pre_IF = _pre_IF_reg_valid_out && _pre_IF_reg_allow_out;
 
     wire pre_IF_IF_reg_valid_in = _pre_IF_reg_valid_out;
     wire pre_IF_IF_reg_valid_out;
@@ -387,6 +388,7 @@ module mycpu_top(
     wire IF_ID_reg_allow_out;
     wire IF_ID_reg_valid;
     wire IF_ID_reg_flush;
+    wire leaving_ID = IF_ID_reg_valid_out && IF_ID_reg_allow_out;
 
     wire IF_ID_reg_stall_hazard;
     wire IF_ID_reg_stall = IF_ID_reg_stall_hazard;
@@ -429,7 +431,10 @@ module mycpu_top(
     wire exception_MEM_old;
     wire exception_WB_old;
 
-    wire exception_EX_MEM_WB = |{exception_EX, exception_MEM, exception_WB};
+    wire exception_EX_MEM_WB =
+         |{exception_EX & ID_EX_reg_valid,
+           exception_MEM & EX_MEM_reg_valid,
+           exception_WB & MEM_WB_reg_valid};
 
     wire [4:0] exccode_IF;
     wire [4:0] exccode_ID;
@@ -491,11 +496,11 @@ module mycpu_top(
             .valid_out(pre_IF_IF_reg_valid_out),
             .valid(pre_IF_IF_reg_valid),
 
-            .in(curr_pc_pre_IF),
-            .out(curr_pc_IF)
+            .in({curr_pc_pre_IF}),
+            .out({curr_pc_IF})
         );
 
-    pipeline_reg #(.WIDTH(32 + 32 + 1 + 1 + 5 + 32)) IF_ID_reg(
+    pipeline_reg #(.WIDTH(32 + 32 + 1 + 5 + 32)) IF_ID_reg(
                      .clk(clk),
                      .reset(reset),
                      .stall(IF_ID_reg_stall),
@@ -509,7 +514,6 @@ module mycpu_top(
                          {
                              curr_pc_IF,
                              instruction_IF,
-                             is_delay_slot_IF,
                              exception_IF,
                              exccode_IF,
                              badvaddr_IF
@@ -518,7 +522,6 @@ module mycpu_top(
                          {
                              curr_pc_ID,
                              instruction_ID,
-                             is_delay_slot_ID,
                              exception_ID_old,
                              exccode_ID_old,
                              badvaddr_ID
@@ -643,7 +646,7 @@ module mycpu_top(
     assign inst_sram_wstrb = 4'b1111;
 
     assign inst_sram_req =
-           _pre_IF_reg_valid & _pre_IF_reg_allow_out& !exception_or_eret_now;
+           _pre_IF_reg_valid & _pre_IF_reg_allow_out & !exception_or_eret_now;
 
     assign inst_sram_wr = 1'b0;
 
@@ -652,8 +655,6 @@ module mycpu_top(
     // We misses the delay slot if:
     wire delay_slot_miss =
          ~next_pc_is_next & ~pre_IF_IF_reg_valid;
-
-    wire leaving_pre_IF = _pre_IF_reg_valid_out && _pre_IF_reg_allow_out;
 
     reg [31:0] target;
     reg use_target;
@@ -685,14 +686,13 @@ module mycpu_top(
         end
     end
 
-
     wire should_discard_instruction =
          exception_or_eret_now & (
              // the address is accepted in pre-IF
              (inst_sram_req & inst_sram_addr_ok)
              || // or
              // IF is waiting for data
-             (pre_IF_IF_reg_stall_wait_for_data & !IF_ID_reg_valid_out)
+             pre_IF_IF_reg_stall_wait_for_data
          );
 
     reg discard_instruction;
@@ -721,7 +721,7 @@ module mycpu_top(
             // of the delay slot in this cycle, and request for the
             // instruction of the target in the next cycle.
             curr_pc_pre_IF = curr_pc_IF + 4;
-        else if (_pre_IF_reg_valid_out & _pre_IF_reg_allow_out) begin
+        else if (leaving_pre_IF) begin
             if (use_target)
                 curr_pc_pre_IF = target;
             else
@@ -817,7 +817,7 @@ module mycpu_top(
                 .rs_data(rs_data_ID),
                 .rt_data(rt_data_ID),
 
-                .is_delay_slot_IF(is_delay_slot_IF),
+                .branch_or_jump(branch_or_jump_ID),
 
                 .next_pc_is_next(next_pc_is_next),
                 .next_pc_is_branch_target(next_pc_is_branch_target),
@@ -873,6 +873,20 @@ module mycpu_top(
                 .exc_break(exc_break_ID),
                 .eret(eret_ID)
             );
+
+    always @(posedge clk) begin
+        if (reset | IF_ID_reg_flush) begin
+            is_delay_slot_ID <= 0;
+        end else begin
+            if (branch_or_jump_ID) begin
+                is_delay_slot_ID <= 1;
+            end else begin
+                if (is_delay_slot_ID & leaving_ID) begin
+                    is_delay_slot_ID <= 0;
+                end
+            end
+        end
+    end
 
     wire [31:0] rs_data_ID_no_forward;
     wire [31:0] rt_data_ID_no_forward;
@@ -1109,7 +1123,7 @@ module mycpu_top(
     wire [31:0] lo;
     mult_div mult_div(
                  .clk(clk),
-                 .en(~exception_EX_MEM_WB),
+                 .en(~exception_EX_MEM_WB & ID_EX_reg_valid),
                  .reset(reset),
                  .is_mult(is_mult_EX),
                  .is_multu(is_multu_EX),
@@ -1132,8 +1146,10 @@ module mycpu_top(
 
     assign data_sram_req = ID_EX_reg_valid
            & (mem_en_EX | mem_wen_EX)
-           // avoid sending multiple requests when stalling
-           & ID_EX_reg_allow_out;
+           // avoid sending multiple requests when stalling:
+           & ID_EX_reg_allow_out
+           // avoid sending request when exceptions have happened:
+           & ~exception_EX_MEM_WB;
 
     reg [2:0] wstrb_count;
     integer i;

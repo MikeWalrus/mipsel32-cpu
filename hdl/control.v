@@ -9,7 +9,7 @@ module control(
         input [31:0] rs_data,
         input [31:0] rt_data,
 
-        output is_delay_slot_IF,
+        output branch_or_jump,
 
         output next_pc_is_next,
         output reg next_pc_is_branch_target,
@@ -189,7 +189,7 @@ module control(
     assign next_pc_is_next =
            ~next_pc_is_branch_target & ~next_pc_is_jal_target
            & ~next_pc_is_jr_target;
-    assign is_delay_slot_IF = |{
+    assign branch_or_jump = |{
                is_branch, is_jal, is_j, is_R_type & (func_jr | func_jalr)
            } & is_IF_ID_valid;
     assign overflow_en =

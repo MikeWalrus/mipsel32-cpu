@@ -175,11 +175,10 @@ module cp0(
     always @(*) begin
         exception_now = 0;
         eret_now = 0;
-        if (exception & ~status_exl) begin
-            exception_now = 1;
-        end
-        if (eret) begin
+        if (eret)
             eret_now = 1;
+        else if (exception & ~status_exl) begin
+            exception_now = 1;
         end
     end
 
