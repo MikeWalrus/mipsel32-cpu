@@ -9,17 +9,12 @@ module control(
         input [31:0] rs_data,
         input [31:0] rt_data,
 
-        input exception_now,
-        input eret_now,
-
         output is_delay_slot_IF,
 
         output next_pc_is_next,
         output reg next_pc_is_branch_target,
         output reg next_pc_is_jal_target,
         output reg next_pc_is_jr_target,
-        output reg next_pc_is_exception_entry,
-        output reg next_pc_is_epc,
 
         output imm_is_sign_extend,
 
@@ -181,14 +176,8 @@ module control(
     always @(*) begin
         next_pc_is_jr_target = 0;
         next_pc_is_jal_target = 0;
-        next_pc_is_exception_entry = 0;
         next_pc_is_branch_target = 0;
-        next_pc_is_epc = 0;
-        if (eret_now)
-            next_pc_is_epc = 1;
-        else if (exception_now)
-            next_pc_is_exception_entry = 1;
-        else if (is_IF_ID_valid) begin
+        if (is_IF_ID_valid) begin
             if (is_jal | is_j)
                 next_pc_is_jal_target = 1;
             else if (is_R_type & (func_jr | func_jalr))
@@ -199,8 +188,7 @@ module control(
     end
     assign next_pc_is_next =
            ~next_pc_is_branch_target & ~next_pc_is_jal_target
-           & ~next_pc_is_jr_target & ~next_pc_is_exception_entry
-           & ~next_pc_is_epc;
+           & ~next_pc_is_jr_target;
     assign is_delay_slot_IF = |{
                is_branch, is_jal, is_j, is_R_type & (func_jr | func_jalr)
            } & is_IF_ID_valid;

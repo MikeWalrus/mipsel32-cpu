@@ -3,9 +3,6 @@ module mycpu_top(
         input clk,
         input resetn,
 
-        /* output inst_sram_en, */
-        /* output [3:0] inst_sram_wen, */
-
         output inst_sram_req,
         output inst_sram_wr,
         output [1:0] inst_sram_size,
@@ -15,9 +12,6 @@ module mycpu_top(
         input inst_sram_addr_ok,
         input inst_sram_data_ok,
         input [31:0] inst_sram_rdata,
-
-        /* output data_sram_en, */
-        /* output [3:0] data_sram_wen, */
 
         output data_sram_req,
         output data_sram_wr,
@@ -36,7 +30,6 @@ module mycpu_top(
     );
     wire reset;
     assign reset = ~resetn;
-    assign inst_sram_en = 1;
 
     wire mem_en_ID;
     wire mem_en_EX;
@@ -88,8 +81,6 @@ module mycpu_top(
     wire next_pc_is_branch_target;
     wire next_pc_is_jal_target;
     wire next_pc_is_jr_target;
-    wire next_pc_is_exception_entry;
-    wire next_pc_is_epc;
 
     wire [31:0] jr_target = rs_data_ID; // jr, jalr
     wire [31:0] branch_target;          // b*
@@ -348,11 +339,14 @@ module mycpu_top(
             rd_WB,
             is_delay_slot_WB
         } = cp0_signals_WB;
-    // Notice: These indices is related to the order of assignment above.
+    // NOTE: These indices is related to the order of assignment above.
     wire mfc0_EX = cp0_signals_EX[6];
     wire mfc0_MEM = cp0_signals_MEM[6];
     wire exception_now;
     wire eret_now;
+    wire exception_now_pre_IF;
+    wire eret_now_pre_IF;
+    wire exception_or_eret_now = exception_now | eret_now;
 
     wire [31:0] badvaddr_IF;
     wire [31:0] badvaddr_ID;
@@ -381,9 +375,12 @@ module mycpu_top(
     wire pre_IF_IF_reg_allow_out;
     wire pre_IF_IF_reg_valid;
 
-    wire pre_IF_IF_reg_flush = 0;
+    wire pre_IF_IF_reg_flush;
     wire pre_IF_IF_reg_stall_wait_for_data;
-    wire pre_IF_IF_reg_stall = pre_IF_IF_reg_stall_wait_for_data;
+    wire pre_IF_IF_reg_stall_discard_instruction;
+    wire pre_IF_IF_reg_stall =
+         |{pre_IF_IF_reg_stall_wait_for_data,
+           pre_IF_IF_reg_stall_discard_instruction};
 
     wire IF_ID_reg_valid_in = pre_IF_IF_reg_valid_out;
     wire IF_ID_reg_valid_out;
@@ -458,7 +455,7 @@ module mycpu_top(
     // pipeline registers
     pipeline_reg
         #(
-            .WIDTH(0)
+            .WIDTH(2)
         )
         _pre_IF_reg(
             .clk(clk),
@@ -470,7 +467,10 @@ module mycpu_top(
             .allow_in(_pre_IF_reg_allow_in),
             .allow_out(_pre_IF_reg_allow_out),
             .valid_out(_pre_IF_reg_valid_out),
-            .valid(_pre_IF_reg_valid)
+            .valid(_pre_IF_reg_valid),
+
+            .in({exception_now, eret_now}),
+            .out({exception_now_pre_IF, eret_now_pre_IF})
         );
 
     pipeline_reg
@@ -642,7 +642,8 @@ module mycpu_top(
     assign inst_sram_size = 2'd2;
     assign inst_sram_wstrb = 4'b1111;
 
-    assign inst_sram_req = _pre_IF_reg_valid & _pre_IF_reg_allow_out;
+    assign inst_sram_req =
+           _pre_IF_reg_valid & _pre_IF_reg_allow_out& !exception_or_eret_now;
 
     assign inst_sram_wr = 1'b0;
 
@@ -664,16 +665,14 @@ module mycpu_top(
             target <= next_pc;
             if (pre_IF_IF_reg_valid & leaving_pre_IF)
                 use_target <= 0; // haven't missed the delay slot
-            else// if (!pre_IF_IF_reg_valid) begin
+            else
                 use_target <= 1;
-            //end
         end else begin
             if (use_target && !delay_slot_have_missed && leaving_pre_IF) begin
                 use_target <= 0;
             end
         end
     end
-
 
     reg delay_slot_have_missed;
     always @(posedge clk) begin
@@ -686,8 +685,38 @@ module mycpu_top(
         end
     end
 
+
+    wire should_discard_instruction =
+         exception_or_eret_now & (
+             // the address is accepted in pre-IF
+             (inst_sram_req & inst_sram_addr_ok)
+             || // or
+             // IF is waiting for data
+             (pre_IF_IF_reg_stall_wait_for_data & !IF_ID_reg_valid_out)
+         );
+
+    reg discard_instruction;
+    always @(posedge clk) begin
+        if (reset) begin
+            discard_instruction <= 0;
+        end begin
+            if (should_discard_instruction) begin
+                discard_instruction <= 1;
+            end else if (inst_sram_data_ok) begin
+                // If an unwanted instruction needs to be discarded,
+                // it has been discarded.
+                discard_instruction <= 0;
+            end
+        end
+    end
+    assign pre_IF_IF_reg_stall_discard_instruction = discard_instruction;
+
     always @(*) begin
-        if (delay_slot_miss || delay_slot_have_missed)
+        if (exception_now_pre_IF)
+            curr_pc_pre_IF = 32'hBFC0_0380;
+        else if (eret_now_pre_IF)
+            curr_pc_pre_IF = cp0_epc;
+        else if (delay_slot_miss || delay_slot_have_missed)
             // We've missed the delay slot, so we request for the instruction
             // of the delay slot in this cycle, and request for the
             // instruction of the target in the next cycle.
@@ -701,24 +730,20 @@ module mycpu_top(
             curr_pc_pre_IF = curr_pc_IF;
     end
 
-    mux_1h #(.num_port(6)) next_pc_mux(
+    mux_1h #(.num_port(4)) next_pc_mux(
                .select(
                    {
                        next_pc_is_next,
                        next_pc_is_branch_target,
                        next_pc_is_jal_target,
-                       next_pc_is_jr_target,
-                       next_pc_is_exception_entry,
-                       next_pc_is_epc
+                       next_pc_is_jr_target
                    }),
                .in(
                    {
                        curr_pc_IF+32'd4,
                        branch_target,
                        jal_target,
-                       jr_target,
-                       32'hbfc00380,
-                       cp0_epc
+                       jr_target
                    }),
                .out(next_pc)
            );
@@ -792,17 +817,12 @@ module mycpu_top(
                 .rs_data(rs_data_ID),
                 .rt_data(rt_data_ID),
 
-                .exception_now(exception_now),
-                .eret_now(eret_now),
-
                 .is_delay_slot_IF(is_delay_slot_IF),
 
                 .next_pc_is_next(next_pc_is_next),
                 .next_pc_is_branch_target(next_pc_is_branch_target),
                 .next_pc_is_jal_target(next_pc_is_jal_target),
                 .next_pc_is_jr_target(next_pc_is_jr_target),
-                .next_pc_is_exception_entry(next_pc_is_exception_entry),
-                .next_pc_is_epc(next_pc_is_epc),
 
                 .imm_is_sign_extend(imm_is_sign_extend),
 
@@ -1304,16 +1324,17 @@ module mycpu_top(
             .status_ie_out(cp0_status_ie),
             .status_exl_out(cp0_status_exl),
 
-            .pipeline_reg_flush(
-                {
-                    IF_ID_reg_flush,
-                    ID_EX_reg_flush,
-                    EX_MEM_reg_flush,
-                    MEM_WB_reg_flush
-                }),
             .exception_now(exception_now),
             .eret_now(eret_now)
         );
+
+    assign {
+            pre_IF_IF_reg_flush,
+            IF_ID_reg_flush,
+            ID_EX_reg_flush,
+            EX_MEM_reg_flush,
+            MEM_WB_reg_flush
+        } = {5{exception_or_eret_now}};
 
     assign reg_write_data_WB =
            mfc0_WB ? cp0_reg : reg_write_data_WB_not_mfc0;

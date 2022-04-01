@@ -22,8 +22,6 @@ module cp0(
         output status_ie_out,
         output status_exl_out,
 
-        output reg [3:0] pipeline_reg_flush,
-
         output reg exception_now,
         output reg eret_now
     );
@@ -175,16 +173,13 @@ module cp0(
     end
 
     always @(*) begin
-        pipeline_reg_flush = 4'b0;
         exception_now = 0;
         eret_now = 0;
         if (exception & ~status_exl) begin
-            pipeline_reg_flush = {4{1'b1}};
             exception_now = 1;
         end
         if (eret) begin
             eret_now = 1;
-            pipeline_reg_flush = {4{1'b1}};
         end
     end
 
