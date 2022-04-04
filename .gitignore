@@ -1,7 +1,9 @@
 test/*
 *.mif
 golden_trace.txt
-sim
 *.gtkw
 *.vcd
 *.lx2
+
+cpu_sim
+div_test
