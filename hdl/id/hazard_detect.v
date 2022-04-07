@@ -15,7 +15,7 @@ module hazard_detect(
     );
     assign IF_ID_reg_stall = en &
            |{
-               (reg_write_is_mem_EX|mfc0_EX)
+               (reg_write_is_mem_EX | mfc0_EX)
                & (rs_data_ID_is_from_ex | rt_data_ID_is_from_ex),
 
                (mfc0_MEM | (reg_write_is_mem_MEM & mem_wait_for_data))

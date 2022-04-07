@@ -40,7 +40,10 @@ module pre_IF(
     assign inst_sram_size = 2'd2;
     assign inst_sram_wstrb = 4'b1111;
     assign inst_sram_req =
-           _pre_IF_reg_valid & _pre_IF_reg_allow_out & !exception_or_eret_now & !exception_pre_IF;
+           _pre_IF_reg_valid
+           & _pre_IF_reg_allow_out
+           & !exception_or_eret_now
+           & !exception_pre_IF;
 
     assign inst_sram_wr = 1'b0;
     addr_trans addr_trans_inst(

@@ -1,6 +1,5 @@
 design_source := $(wildcard hdl/*/*.v) $(wildcard hdl/*.v)
-
-verilog-axi_source := $(wildcard sim/verilog-axi/rtl/*.v)
+verilog-axi_source := $(addprefix sim/verilog-axi/rtl/, axi_ram.v axi_crossbar.v axi_crossbar_wr.v axi_crossbar_addr.v axi_crossbar_rd.v arbiter.v axi_register_wr.v axi_register_rd.v priority_encoder.v)
 sim_source := $(wildcard sim/*.v) $(verilog-axi_source)
 
 all: cpu_sim
