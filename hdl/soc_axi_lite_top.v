@@ -92,6 +92,7 @@ module soc_axi_lite_top #(parameter SIMULATION=1'b0)
     begin
         cpu_resetn <= resetn;
     end
+`ifndef IVERILOG
     generate if(SIMULATION && `SIMU_USE_PLL==0)
         begin: speedup_simulation
             assign cpu_clk   = clk;
@@ -107,6 +108,10 @@ module soc_axi_lite_top #(parameter SIMULATION=1'b0)
                     );
         end
     endgenerate
+`else
+    assign cpu_clk   = clk;
+    assign timer_clk = clk;
+`endif
 
     //cpu axi
     wire [3 :0] cpu_arid   ;
@@ -266,7 +271,7 @@ module soc_axi_lite_top #(parameter SIMULATION=1'b0)
     //cpu axi
     //debug_*
     mycpu_top u_cpu(
-                  .int       (6'd0          ),   //high active
+                  .interrupt (6'd0          ),   //high active
 
                   .aclk      (cpu_clk       ),
                   .aresetn   (cpu_resetn    ),   //low active

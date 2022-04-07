@@ -1,5 +1,5 @@
 `include "cp0.vh"
-module mycpu_top(
+module cpu_sram(
         input clk,
         input resetn,
 
@@ -708,7 +708,9 @@ module mycpu_top(
     reg [31:0] instruction_latched;
     reg instruction_latched_valid;
     always @(posedge clk) begin
-        if (pre_IF_IF_reg_valid & inst_sram_data_ok) begin
+        if (reset)
+            instruction_latched_valid <= 0;
+        else if (pre_IF_IF_reg_valid & inst_sram_data_ok) begin
             if (!pre_IF_IF_reg_allow_out) begin
                 instruction_latched <= inst_sram_rdata;
                 instruction_latched_valid <= 1;
@@ -724,7 +726,7 @@ module mycpu_top(
          ~inst_sram_data_ok & pre_IF_IF_reg_valid;
 
     assign instruction_IF =
-           instruction_not_available & instruction_latched_valid ?
+           (instruction_not_available & instruction_latched_valid) ?
            instruction_latched : inst_sram_rdata;
 
     assign pre_IF_IF_reg_stall_wait_for_data =

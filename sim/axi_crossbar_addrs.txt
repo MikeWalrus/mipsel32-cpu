@@ -1,0 +1,5 @@
+BASE_ADDRESS
+512'hbfc00000_a0000000_00000000_c0000000_40000000_80000000_20000000_1fc00000_ffffffff_ffffffff_ffffffff_ffffffff_ffffffff_ffffffff_bfaf0000_1faf0000
+
+ADDR_WIDTH
+{32'd22, 32'd28, 32'd28, 32'd30, 32'd30, 32'd29, 32'd29, 32'd22, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd 16, 32'd16}

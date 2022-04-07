@@ -69,7 +69,7 @@ module tb_top( );
         resetn = 1'b1;
     end
     always #5 clk=~clk;
-    soc_sram_lite_top #(.SIMULATION(1'b1)) soc_lite
+    soc_axi_lite_top #(.SIMULATION(1'b1)) soc_lite
                       (
                           .resetn      (resetn     ),
                           .clk         (clk        ),
@@ -110,8 +110,7 @@ module tb_top( );
 
     // intialise the rams
     initial begin
-        $readmemb("inst_ram.mif", soc_lite.inst_ram.ram.ram_);
-        $readmemb("data_ram.mif", soc_lite.data_ram.ram.ram_);
+        $readmemb("inst_ram.mif", soc_lite.u_axi_ram.ram.mem);
     end
 
     //get reference result in falling edge

@@ -203,45 +203,63 @@ module axi_wrap_ram(
 
 
     // inst ram axi
-    axi_ram ram(
-                .s_aclk         (aclk         ),
-                .s_aresetn      (aresetn      ),
-
-                //ar
-                .s_axi_arid     (ram_arid     ),
-                .s_axi_araddr   (ram_araddr   ),
-                .s_axi_arlen    (ram_arlen    ),
-                .s_axi_arsize   (ram_arsize   ),
-                .s_axi_arburst  (ram_arburst  ),
-                .s_axi_arvalid  (ram_arvalid  ),
-                .s_axi_arready  (ram_arready  ),
-                //r
-                .s_axi_rid      (ram_rid      ),
-                .s_axi_rdata    (ram_rdata    ),
-                .s_axi_rresp    (ram_rresp    ),
-                .s_axi_rlast    (ram_rlast    ),
-                .s_axi_rvalid   (ram_rvalid   ),
-                .s_axi_rready   (ram_rready   ),
-                //aw
-                .s_axi_awid     (ram_awid     ),
-                .s_axi_awaddr   (ram_awaddr   ),
-                .s_axi_awlen    (ram_awlen    ),
-                .s_axi_awsize   (ram_awsize   ),
-                .s_axi_awburst  (ram_awburst  ),
-                .s_axi_awvalid  (ram_awvalid  ),
-                .s_axi_awready  (ram_awready  ),
-                //w
-                .s_axi_wdata    (ram_wdata    ),
-                .s_axi_wstrb    (ram_wstrb    ),
-                .s_axi_wlast    (ram_wlast    ),
-                .s_axi_wvalid   (ram_wvalid   ),
-                .s_axi_wready   (ram_wready   ),
-                //b
-                .s_axi_bid      (ram_bid      ),
-                .s_axi_bresp    (ram_bresp    ),
-                .s_axi_bvalid   (ram_bvalid   ),
-                .s_axi_bready   (ram_bready   )
-            );
+    axi_ram
+`ifdef IVERILOG
+        #(
+            .DATA_WIDTH(32),
+            .ADDR_WIDTH(20),
+            .ID_WIDTH(4)
+        )
+`endif
+        ram(
+`ifdef IVERILOG
+            .clk            (aclk),
+            .rst            (~aresetn),
+            .s_axi_awlock(1'b0),
+            .s_axi_awcache(4'b0),
+            .s_axi_awprot(3'b0),
+            .s_axi_arlock(1'b0),
+            .s_axi_arcache(4'b0),
+            .s_axi_arprot(3'b0),
+`else
+            .s_aclk(aclk),
+            .s_aresetn(aresetn),
+`endif
+            //ar
+            .s_axi_arid     (ram_arid     ),
+            .s_axi_araddr   (ram_araddr   ),
+            .s_axi_arlen    (ram_arlen    ),
+            .s_axi_arsize   (ram_arsize   ),
+            .s_axi_arburst  (ram_arburst  ),
+            .s_axi_arvalid  (ram_arvalid  ),
+            .s_axi_arready  (ram_arready  ),
+            //r
+            .s_axi_rid      (ram_rid      ),
+            .s_axi_rdata    (ram_rdata    ),
+            .s_axi_rresp    (ram_rresp    ),
+            .s_axi_rlast    (ram_rlast    ),
+            .s_axi_rvalid   (ram_rvalid   ),
+            .s_axi_rready   (ram_rready   ),
+            //aw
+            .s_axi_awid     (ram_awid     ),
+            .s_axi_awaddr   (ram_awaddr   ),
+            .s_axi_awlen    (ram_awlen    ),
+            .s_axi_awsize   (ram_awsize   ),
+            .s_axi_awburst  (ram_awburst  ),
+            .s_axi_awvalid  (ram_awvalid  ),
+            .s_axi_awready  (ram_awready  ),
+            //w
+            .s_axi_wdata    (ram_wdata    ),
+            .s_axi_wstrb    (ram_wstrb    ),
+            .s_axi_wlast    (ram_wlast    ),
+            .s_axi_wvalid   (ram_wvalid   ),
+            .s_axi_wready   (ram_wready   ),
+            //b
+            .s_axi_bid      (ram_bid      ),
+            .s_axi_bresp    (ram_bresp    ),
+            .s_axi_bvalid   (ram_bvalid   ),
+            .s_axi_bready   (ram_bready   )
+        );
 
     //ar
     assign ram_arid    = axi_arid   ;

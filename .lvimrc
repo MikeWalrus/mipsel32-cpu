@@ -1,2 +1,3 @@
-let dirs = globpath("hdl", "*/", 0, 1) + ["hdl", "sim"]
-let g:ale_verilog_verilator_options = "-Ihdl/include " .. join(map(dirs, '"-y " .. v:val'))
+let dirs = globpath("hdl", "*/", 0, 1) + ["hdl", "sim", "sim/verilog-axi/rtl"]
+let g:ale_verilog_verilator_options = "-DIVERILOG -Ihdl/include "
+    \ .. join(map(dirs, '"-y " .. v:val'))

@@ -1,7 +1,9 @@
 design_source := $(wildcard hdl/*/*.v) $(wildcard hdl/*.v)
-sim_source := $(wildcard sim/*.v)
 
-all: sim
+verilog-axi_source := $(wildcard sim/verilog-axi/rtl/*.v)
+sim_source := $(wildcard sim/*.v) $(verilog-axi_source)
+
+all: cpu_sim
 
 cpu_sim: $(design_source) $(sim_source)
 	iverilog -Wall -o $@ -Ihdl/include -DIVERILOG -DSIMULATION $(design_source) $(sim_source)
