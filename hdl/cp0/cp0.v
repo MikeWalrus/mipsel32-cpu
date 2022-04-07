@@ -77,6 +77,9 @@ module cp0(
              {2{1'b0}}
          };
 
+    reg [31:0] count;
+    reg [31:0] compare;
+
     always @(posedge clk) begin
         if (reset) begin
             cause_bd <= 1'b0;
@@ -129,8 +132,6 @@ module cp0(
         end
     end
 
-
-    reg [31:0] count;
     reg count_should_inc;
 
     always @(posedge clk) begin
@@ -142,7 +143,6 @@ module cp0(
 
     always @(posedge clk) begin
         if (reset) begin
-            count_should_inc <= 1'b1;
             count <= 32'd0;
         end else if (wen && reg_num == `COUNT) begin
             count <= reg_in;
@@ -150,8 +150,6 @@ module cp0(
             count <= count + 1;
     end
 
-
-    reg [31:0] compare;
     always @(posedge clk) begin
         if (wen && reg_num == `COMPARE)
             compare <= reg_in;

@@ -1,6 +1,9 @@
 module hazard_detect(
         input en,
+
         input reg_write_is_mem_EX,
+        input reg_write_is_mem_MEM,
+        input mem_wait_for_data,
         input mfc0_EX,
         input mfc0_MEM,
 
@@ -15,7 +18,7 @@ module hazard_detect(
                (reg_write_is_mem_EX|mfc0_EX)
                & (rs_data_ID_is_from_ex | rt_data_ID_is_from_ex),
 
-               mfc0_MEM
+               (mfc0_MEM | (reg_write_is_mem_MEM & mem_wait_for_data))
                & (rs_data_ID_is_from_mem | rt_data_ID_is_from_mem)
            };
 endmodule

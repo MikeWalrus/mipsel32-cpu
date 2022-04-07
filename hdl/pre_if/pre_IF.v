@@ -1,3 +1,4 @@
+`include "cp0.vh"
 module pre_IF(
         input clk,
         input reset,
@@ -31,12 +32,15 @@ module pre_IF(
 
         input [31:0] next_pc_without_exception,
         input [31:0] curr_pc_IF,
-        output reg [31:0] curr_pc_pre_IF
+        output reg [31:0] curr_pc_pre_IF,
+
+        output exception_pre_IF,
+        output [4:0] exccode_pre_IF
     );
     assign inst_sram_size = 2'd2;
     assign inst_sram_wstrb = 4'b1111;
     assign inst_sram_req =
-           _pre_IF_reg_valid & _pre_IF_reg_allow_out & !exception_or_eret_now;
+           _pre_IF_reg_valid & _pre_IF_reg_allow_out & !exception_or_eret_now & !exception_pre_IF;
 
     assign inst_sram_wr = 1'b0;
     addr_trans addr_trans_inst(
@@ -113,7 +117,7 @@ module pre_IF(
             // of the delay slot in this cycle, and request for the
             // instruction of the target in the next cycle.
             curr_pc_pre_IF = curr_pc_IF + 4;
-        else if (leaving_pre_IF) begin
+        else if (inst_sram_addr_ok && _pre_IF_reg_allow_out) begin
             if (use_target)
                 curr_pc_pre_IF = target;
             else
@@ -122,4 +126,14 @@ module pre_IF(
             curr_pc_pre_IF = curr_pc_IF;
     end
     assign _pre_IF_reg_stall = inst_sram_req & ~inst_sram_addr_ok;
+
+    wire inst_addr_error = (curr_pc_pre_IF[1:0] != 2'b00);
+    exception_combine inst_addr_error_exception(
+                          .exception_h(1'b0),
+                          .exccode_h({5{1'bz}}),
+                          .exception_l(inst_addr_error),
+                          .exccode_l(`EXC_AdEL),
+                          .exception_out(exception_pre_IF),
+                          .exccode_out(exccode_pre_IF)
+                      );
 endmodule

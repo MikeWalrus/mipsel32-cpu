@@ -422,11 +422,13 @@ module cpu_sram(
     wire MEM_WB_reg_flush;
 
     // exception signals
+    wire exception_pre_IF;
     wire exception_IF;
     wire exception_ID;
     wire exception_EX;
     wire exception_MEM;
     wire exception_WB;
+    wire exception_IF_old;
     wire exception_ID_old;
     wire exception_EX_old;
     wire exception_MEM_old;
@@ -437,18 +439,22 @@ module cpu_sram(
            exception_MEM & EX_MEM_reg_valid,
            exception_WB & MEM_WB_reg_valid};
 
+    wire [4:0] exccode_pre_IF;
     wire [4:0] exccode_IF;
     wire [4:0] exccode_ID;
     wire [4:0] exccode_EX;
     wire [4:0] exccode_MEM;
     wire [4:0] exccode_WB;
+    wire [4:0] exccode_IF_old; // from pre-IF
     wire [4:0] exccode_ID_old; // from IF
     wire [4:0] exccode_EX_old; // from ID
     wire [4:0] exccode_MEM_old; // from EX
     wire [4:0] exccode_WB_old; // from MEM
 
+    assign exception_IF = exception_IF_old;
     assign exception_MEM = exception_MEM_old;
     assign exception_WB = exception_WB_old;
+    assign exccode_IF = exccode_IF_old;
     assign exccode_MEM = exccode_MEM_old;
     assign exccode_WB = exccode_WB_old;
 
@@ -480,9 +486,9 @@ module cpu_sram(
 
     pipeline_reg
         #(
-            .WIDTH(32),
+            .WIDTH(32 + 1 + 5),
             .RESET(1),
-            .RESET_VALUE(32'hBFC0_0000 - 32'd4)
+            .RESET_VALUE({32'hBFC0_0000 - 32'd4, 6'bxxxxxx})
         )
         pre_IF_IF_reg(
             .clk(clk),
@@ -496,8 +502,18 @@ module cpu_sram(
             .valid_out(pre_IF_IF_reg_valid_out),
             .valid(pre_IF_IF_reg_valid),
 
-            .in({curr_pc_pre_IF}),
-            .out({curr_pc_IF})
+            .in(
+                {
+                    curr_pc_pre_IF,
+                    exception_pre_IF,
+                    exccode_pre_IF
+                }),
+            .out(
+                {
+                    curr_pc_IF,
+                    exception_IF_old,
+                    exccode_IF_old
+                })
         );
 
     pipeline_reg #(.WIDTH(32 + 32 + 1 + 5 + 32)) IF_ID_reg(
@@ -679,7 +695,10 @@ module cpu_sram(
 
                .next_pc_without_exception(next_pc_without_exception),
                .curr_pc_IF(curr_pc_IF),
-               .curr_pc_pre_IF(curr_pc_pre_IF)
+               .curr_pc_pre_IF(curr_pc_pre_IF),
+
+               .exception_pre_IF(exception_pre_IF),
+               .exccode_pre_IF(exccode_pre_IF)
            );
 
 
@@ -730,17 +749,10 @@ module cpu_sram(
            instruction_latched : inst_sram_rdata;
 
     assign pre_IF_IF_reg_stall_wait_for_data =
-           instruction_not_available & ~instruction_latched_valid;
+           instruction_not_available
+           & ~instruction_latched_valid
+           & ~exception_IF;
 
-    wire inst_addr_error = curr_pc_IF[1:0] != 2'b00;
-    exception_combine inst_addr_error_exception(
-                          .exception_h(1'b0),
-                          .exccode_h({5{1'bz}}),
-                          .exception_l(inst_addr_error),
-                          .exccode_l(`EXC_AdEL),
-                          .exception_out(exception_IF),
-                          .exccode_out(exccode_IF)
-                      );
     assign badvaddr_IF = curr_pc_IF;
 
 
@@ -940,6 +952,8 @@ module cpu_sram(
     hazard_detect hazard_detect(
                       .en(IF_ID_reg_valid),
                       .reg_write_is_mem_EX(reg_write_is_mem_EX),
+                      .reg_write_is_mem_MEM(reg_write_is_mem_MEM),
+                      .mem_wait_for_data(EX_MEM_reg_stall_wait_for_data),
                       .mfc0_EX(mfc0_EX),
                       .mfc0_MEM(mfc0_MEM),
 
