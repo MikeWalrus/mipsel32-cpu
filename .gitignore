@@ -7,3 +7,4 @@ golden_trace.txt
 
 cpu_sim
 div_test
+tlb_test

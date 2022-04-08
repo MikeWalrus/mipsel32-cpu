@@ -16,6 +16,7 @@ run_sim: cpu_sim
 	iverilog -Wall $^ -o $@
 
 div_test: hdl/ex/signed_to_abs.v hdl/ex/div.v
+tlb_test: hdl/tlb/tlb.v testbench/tlb_top.v hdl/util/mux_1h.v
 
 .PHONY:
 run_%_test: %_test
