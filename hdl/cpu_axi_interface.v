@@ -158,7 +158,7 @@ module cpu_axi_interface
     assign arid    = 4'd0;
     assign araddr  = do_addr_r;
     assign arlen   = 8'd0;
-    assign arsize  = do_size_r;
+    assign arsize  = {1'b0, do_size_r};
     assign arburst = 2'd0;
     assign arlock  = 2'd0;
     assign arcache = 4'd0;
@@ -171,7 +171,7 @@ module cpu_axi_interface
     assign awid    = 4'd0;
     assign awaddr  = do_addr_r;
     assign awlen   = 8'd0;
-    assign awsize  = do_size_r;
+    assign awsize  = {1'b0, do_size_r};
     assign awburst = 2'd0;
     assign awlock  = 2'd0;
     assign awcache = 4'd0;
