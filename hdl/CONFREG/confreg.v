@@ -405,7 +405,11 @@ module confreg
     begin
         if(!aresetn)
         begin
+`ifndef NOTRACE
             open_trace <= 1'b1;
+`else
+            open_trace <= 1'b0;
+`endif
         end
         else if(write_open_trace)
         begin

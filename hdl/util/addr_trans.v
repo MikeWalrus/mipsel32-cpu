@@ -1,6 +1,8 @@
 module addr_trans(
         input [31:0] virt_addr,
         output reg [31:0] phy_addr
+
+        // TLB
     );
     // localparam virt_kuseg_start = 32'h0000_0000;
     localparam virt_kseg0_start = 32'h8000_0000;

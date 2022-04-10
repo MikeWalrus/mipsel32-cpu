@@ -5,7 +5,8 @@ sim_source := $(wildcard sim/*.v) $(verilog-axi_source)
 all: cpu_sim
 
 cpu_sim: $(design_source) $(sim_source)
-	iverilog -Wall -o $@ -Ihdl/include -DIVERILOG -DSIMULATION $(design_source) $(sim_source)
+	iverilog -Wall -o $@ -Ihdl/include $(ARGS) -DIVERILOG \
+		-DSIMULATION $(design_source) $(sim_source)
 
 .PHONY:
 run_sim: cpu_sim
@@ -16,7 +17,7 @@ run_sim: cpu_sim
 	iverilog -Wall $^ -o $@
 
 div_test: hdl/ex/signed_to_abs.v hdl/ex/div.v
-tlb_test: hdl/tlb/tlb.v testbench/tlb_top.v hdl/util/mux_1h.v
+tlb_test: hdl/cp0/tlb.v testbench/tlb_top.v hdl/util/mux_1h.v
 
 .PHONY:
 run_%_test: %_test

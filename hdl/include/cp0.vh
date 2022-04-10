@@ -1,4 +1,4 @@
-`define ENTRY 5'd0
+`define INDEX 5'd0
 `define ENTRYLO0 5'd2
 `define ENTRYLO1 5'd3
 `define BADVADDR 5'd8

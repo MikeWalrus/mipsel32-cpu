@@ -1,6 +1,11 @@
 `include "cp0.vh"
 
-module cp0(
+module cp0 #
+    (
+        parameter TLBNUM = 16,
+        parameter TLBNUM_WIDTH = $clog2(TLBNUM)
+    )
+    (
         input clk,
         input reset,
         input [4:0] reg_num,
@@ -155,8 +160,60 @@ module cp0(
             compare <= reg_in;
     end
 
+    reg index_p;
+    reg [TLBNUM_WIDTH-1:0] index_index;
+    wire [31:0] index = {index_p, {32-1-TLBNUM_WIDTH{1'b0}}, index_index};
+
+    always @(posedge clk) begin
+        //TODO: TLB instructions
+        if (reset) begin
+            index_p <= 0;
+        end
+        if (wen && reg_num == `INDEX) begin
+            index_index <= reg_in[TLBNUM_WIDTH-1:0];
+        end
+    end
+
+    reg [19:0] entry_lo_fpn [1:0];
+    reg [2:0] entry_lo_c [1:0];
+    reg entry_lo_d [1:0];
+    reg entry_lo_v [1:0];
+    reg entry_lo_g [1:0];
+    wire [31:0] entry_lo [1:0];
+
+    genvar i;
+    for (i = 0; i < 2; i = i + 1) begin
+        assign entry_lo[i] =
+               {
+                   6'b0,
+                   entry_lo_fpn[i],
+                   entry_lo_c[i],
+                   entry_lo_d[i],
+                   entry_lo_v[i],
+                   entry_lo_g[i]
+               };
+        always @(posedge clk) begin
+            //TODO: TLB instructions
+            if (wen && reg_num == `ENTRYLO0+i[4:0]) begin
+                {
+                    entry_lo_fpn[i],
+                    entry_lo_c[i],
+                    entry_lo_d[i],
+                    entry_lo_v[i],
+                    entry_lo_g[i]
+                } <= reg_in[25:0];
+            end
+        end
+    end
+
     always @(*) begin
         case (reg_num)
+            `INDEX:
+                reg_out = index;
+            `ENTRYLO0:
+                reg_out = entry_lo[0];
+            `ENTRYLO1:
+                reg_out = entry_lo[1];
             `STATUS:
                 reg_out = status;
             `CAUSE:
