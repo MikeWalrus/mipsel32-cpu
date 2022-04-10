@@ -222,6 +222,8 @@ module cp0 #
                 reg_out = epc;
             `BADVADDR:
                 reg_out = badvaddr;
+            `COUNT:
+                reg_out = count;
             default:
                 reg_out = 0;
         endcase
