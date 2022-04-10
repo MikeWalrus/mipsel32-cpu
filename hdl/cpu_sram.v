@@ -973,55 +973,28 @@ module cpu_sram(
                   .exc_interrupt(exc_interrupt)
               );
 
-    wire exception_after_interrupt;
-    wire [4:0] exccode_after_interrupt;
-    exception_combine interrupt_exception(
-                          .exception_h(exception_ID_old),
-                          .exccode_h(exccode_ID_old),
-                          .exception_l(exc_interrupt),
-                          .exccode_l(`EXC_Int),
-                          .exception_out(exception_after_interrupt),
-                          .exccode_out(exccode_after_interrupt)
-                      );
-
-    wire exception_after_reserved;
-    wire [4:0] exccode_after_reserved;
-    exception_combine reserved_exception(
-                          .exception_h(exception_after_interrupt),
-                          .exccode_h(exccode_after_interrupt),
-                          .exception_l(exc_reserved_ID),
-                          .exccode_l(`EXC_RI),
-                          .exception_out(exception_after_reserved),
-                          .exccode_out(exccode_after_reserved)
-                      );
-    wire exception_after_eret;
-    wire [4:0] exccode_after_eret;
-    exception_combine eret_as_exception(
-                          .exception_h(exception_after_reserved),
-                          .exccode_h(exccode_after_reserved),
-                          .exception_l(eret_ID),
-                          .exccode_l(`ERET),
-                          .exception_out(exception_after_eret),
-                          .exccode_out(exccode_after_eret)
-                      );
-    wire exception_after_syscall;
-    wire [4:0] exccode_after_syscall;
-    exception_combine syscall_exception(
-                          .exception_h(exception_after_eret),
-                          .exccode_h(exccode_after_eret),
-                          .exception_l(exc_syscall_ID),
-                          .exccode_l(`EXC_Sys),
-                          .exception_out(exception_after_syscall),
-                          .exccode_out(exccode_after_syscall)
-                      );
-    exception_combine break_exception(
-                          .exception_h(exception_after_syscall),
-                          .exccode_h(exccode_after_syscall),
-                          .exception_l(exc_break_ID),
-                          .exccode_l(`EXC_Bp),
-                          .exception_out(exception_ID),
-                          .exccode_out(exccode_ID)
-                      );
+    exception_multiple #(.NUM(5)) exception_multiple_ID(
+                           .exception_old(exception_ID_old),
+                           .exccode_old(exccode_ID_old),
+                           .exceptions(
+                               {
+                                   exc_interrupt,
+                                   exc_reserved_ID,
+                                   eret_ID,
+                                   exc_syscall_ID,
+                                   exc_break_ID
+                               }),
+                           .exccodes(
+                               {
+                                   `EXC_Int,
+                                   `EXC_RI,
+                                   `ERET,
+                                   `EXC_Sys,
+                                   `EXC_Bp
+                               }),
+                           .exception_out(exception_ID),
+                           .exccode_out(exccode_ID)
+                       );
 
     branch_target_gen branch_target_gen(
                           // Use curr_pc_ID to calculate curr_pc_IF,
