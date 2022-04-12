@@ -13,7 +13,7 @@ module cp0 #
         input [31:0] reg_in,
 
         input wen,
-        input exception,
+        input exception_like,
         input is_delay_slot,
         input [31:0] pc,
         input [5:0] interrupt,
@@ -28,9 +28,12 @@ module cp0 #
         output status_exl_out,
 
         output reg exception_now,
-        output reg eret_now
+        output eret_now,
+        output refetch_now
     );
-    wire eret = exception & exccode == `ERET;
+    wire eret = exception_like & exccode == `ERET;
+    wire refetch = exception_like & exccode == `REFETCH;
+    wire exception = exception_like & ~eret & ~refetch;
     wire status_bev = 1'b1;
     reg [7:0] status_im;
     assign status_im_out = status_im;
@@ -113,7 +116,7 @@ module cp0 #
     always @(posedge clk) begin
         if (reset) begin
             cause_exccode <= 5'd0;
-        end else if (exception & ~eret)
+        end else if (exception)
             cause_exccode <= exccode;
     end
 
@@ -121,7 +124,7 @@ module cp0 #
     assign epc_out = epc;
     wire [31:0] epc_next = is_delay_slot ? pc - 32'd4 : pc;
     always @(posedge clk) begin
-        if (exception & !status_exl & !eret) begin
+        if (exception & !status_exl) begin
             epc <= epc_next;
         end else if (wen && reg_num == `EPC)
             epc <= reg_in;
@@ -231,12 +234,10 @@ module cp0 #
 
     always @(*) begin
         exception_now = 0;
-        eret_now = 0;
-        if (eret)
-            eret_now = 1;
-        else if (exception & ~status_exl) begin
+        if (exception & ~status_exl) begin
             exception_now = 1;
         end
     end
-
+    assign eret_now = eret;
+    assign refetch_now = refetch;
 endmodule

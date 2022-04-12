@@ -453,10 +453,8 @@ module cpu_sram(
     wire [4:0] exccode_MEM_old; // from EX
     wire [4:0] exccode_WB_old; // from MEM
 
-    assign exception_IF = exception_IF_old;
     assign exception_MEM = exception_MEM_old;
     assign exception_WB = exception_WB_old;
-    assign exccode_IF = exccode_IF_old;
     assign exccode_MEM = exccode_MEM_old;
     assign exccode_WB = exccode_WB_old;
 
@@ -756,6 +754,20 @@ module cpu_sram(
            & ~exception_IF;
 
     assign badvaddr_IF = curr_pc_IF;
+
+    exception_combine refetch_as_exception(
+                          .exception_h(exception_IF_old),
+                          .exccode_h(exccode_IF_old),
+                          .exception_l(
+                              mfc0_ID & IF_ID_reg_valid
+                              | mfc0_EX & ID_EX_reg_valid
+                              | mfc0_MEM & EX_MEM_reg_valid
+                              | mfc0_WB & MEM_WB_reg_valid
+                          ),
+                          .exccode_l(`REFETCH),
+                          .exception_out(exception_IF),
+                          .exccode_out(exccode_IF)
+                      );
 
 
     //
@@ -1218,7 +1230,7 @@ module cpu_sram(
             .reg_in(rt_data_WB),
 
             .wen(mtc0_WB & MEM_WB_reg_valid),
-            .exception(exception_WB & MEM_WB_reg_valid),
+            .exception_like(exception_WB & MEM_WB_reg_valid),
             .is_delay_slot(is_delay_slot_WB),
             .pc(curr_pc_WB),
             .interrupt(exc_int),

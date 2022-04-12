@@ -32,6 +32,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------*/
 //for func test, no define RUN_PERF_TEST
 `define _RUN_PERF_TEST
+`define _RUN_PERF_NO_DELAY
 
 module axi_wrap_ram(
         input         aclk,
@@ -109,10 +110,15 @@ module axi_wrap_ram(
     //mask
 `ifdef RUN_PERF_TEST
     assign ar_and = 1'b1;
-    assign  r_and = pf_r2r_nomask;
     assign aw_and = 1'b1;
     assign  w_and = 1'b1;
+    `ifdef RUN_PERF_NO_DELAY
+    assign  r_and = 1'b1;
+    assign  b_and = 1'b1;
+    `else
+    assign  r_and = pf_r2r_nomask;
     assign  b_and = pf_b2b_nomask;
+    `endif
 `else
     assign ar_and = ram_random_mask[4] | ar_nomask;
     assign  r_and = ram_random_mask[3]            ;

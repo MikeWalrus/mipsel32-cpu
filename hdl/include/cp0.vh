@@ -19,3 +19,4 @@
 `define EXC_Ov 5'h0c
 
 `define ERET 5'h1f
+`define REFETCH 5'h1e
