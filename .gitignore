@@ -5,6 +5,6 @@ golden_trace.txt
 *.vcd
 *.lx2
 
-cpu_sim
+cpu_axi_sim
 div_test
 tlb_test

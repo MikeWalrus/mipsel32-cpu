@@ -271,7 +271,7 @@ module soc_axi_lite_top #(parameter SIMULATION=1'b0)
     //cpu axi
     //debug_*
     mycpu_top u_cpu(
-                  .interrupt (6'd0          ),   //high active
+                  .exc_int   (6'd0          ),   //high active
 
                   .aclk      (cpu_clk       ),
                   .aresetn   (cpu_resetn    ),   //low active
