@@ -7,6 +7,7 @@ verilog-axi_source := $(addprefix \
 	axi_crossbar_rd.v arbiter.v axi_register_wr.v \
 	axi_register_rd.v priority_encoder.v \
 )
+
 soc_axi_source := $(wildcard hdl/soc/axi/*.v)
 soc_axi_sim_source := $(verilog-axi_source) $(wildcard sim/axi/*.v)
 
@@ -20,7 +21,6 @@ cpu_%_sim: $(cpu_source) $$(soc_$$*_source) $$(soc_$$*_sim_source)
 	iverilog -Wall -o $@ -Ihdl/include $(ARGS) -DIVERILOG \
 		-DSIMULATION $^
 		
-
 .INTERMEDIATE:
 %_test: testbench/%_test.v
 	iverilog -Wall $^ -o $@
