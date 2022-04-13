@@ -343,13 +343,20 @@ module cpu_sram(
             is_delay_slot_WB
         } = cp0_signals_WB;
     // NOTE: These indices is related to the order of assignment above.
+    wire mtc0_EX = cp0_signals_EX[7];
     wire mfc0_EX = cp0_signals_EX[6];
+    wire mtc0_MEM = cp0_signals_MEM[7];
     wire mfc0_MEM = cp0_signals_MEM[6];
     wire exception_now;
     wire eret_now;
+    wire refetch_now;
     wire exception_now_pre_IF;
     wire eret_now_pre_IF;
-    wire exception_or_eret_now = exception_now | eret_now;
+    wire refetch_now_pre_IF;
+    wire exception_like_now = exception_now | eret_now | refetch_now;
+
+    wire [31:0] refetch_pc = curr_pc_WB;
+    wire [31:0] refetch_pc_pre_IF;
 
     wire [31:0] badvaddr_IF;
     wire [31:0] badvaddr_ID;
@@ -466,7 +473,7 @@ module cpu_sram(
     // pipeline registers
     pipeline_reg
         #(
-            .WIDTH(2)
+            .WIDTH(3 + 32)
         )
         _pre_IF_reg(
             .clk(clk),
@@ -480,8 +487,20 @@ module cpu_sram(
             .valid_out(_pre_IF_reg_valid_out),
             .valid(_pre_IF_reg_valid),
 
-            .in({exception_now, eret_now}),
-            .out({exception_now_pre_IF, eret_now_pre_IF})
+            .in(
+                {
+                    exception_now,
+                    eret_now,
+                    refetch_now,
+                    refetch_pc
+                }),
+            .out(
+                {
+                    exception_now_pre_IF,
+                    eret_now_pre_IF,
+                    refetch_now_pre_IF,
+                    refetch_pc_pre_IF
+                })
         );
 
     pipeline_reg
@@ -686,10 +705,13 @@ module cpu_sram(
 
                .IF_ID_reg_valid_out(IF_ID_reg_valid_out),
 
-               .exception_or_eret_now(exception_or_eret_now),
+               .exception_like_now(exception_like_now),
                .exception_now_pre_IF(exception_now_pre_IF),
                .eret_now_pre_IF(eret_now_pre_IF),
+               .refetch_now_pre_IF(refetch_now_pre_IF),
+
                .cp0_epc(cp0_epc),
+               .refetch_pc_pre_IF(refetch_pc_pre_IF),
 
                .next_pc_is_next(next_pc_is_next),
 
@@ -751,7 +773,7 @@ module cpu_sram(
     assign pre_IF_IF_reg_stall_wait_for_data =
            instruction_not_available
            & ~instruction_latched_valid
-           & ~exception_IF;
+           & ~(exception_IF & exccode_IF == `EXC_AdEL);
 
     assign badvaddr_IF = curr_pc_IF;
 
@@ -759,10 +781,10 @@ module cpu_sram(
                           .exception_h(exception_IF_old),
                           .exccode_h(exccode_IF_old),
                           .exception_l(
-                              mfc0_ID & IF_ID_reg_valid
-                              | mfc0_EX & ID_EX_reg_valid
-                              | mfc0_MEM & EX_MEM_reg_valid
-                              | mfc0_WB & MEM_WB_reg_valid
+                              mtc0_ID & IF_ID_reg_valid
+                              | mtc0_EX & ID_EX_reg_valid
+                              | mtc0_MEM & EX_MEM_reg_valid
+                              | mtc0_WB & MEM_WB_reg_valid
                           ),
                           .exccode_l(`REFETCH),
                           .exception_out(exception_IF),
@@ -1245,7 +1267,8 @@ module cpu_sram(
             .status_exl_out(cp0_status_exl),
 
             .exception_now(exception_now),
-            .eret_now(eret_now)
+            .eret_now(eret_now),
+            .refetch_now(refetch_now)
         );
 
     assign {
@@ -1254,7 +1277,7 @@ module cpu_sram(
             ID_EX_reg_flush,
             EX_MEM_reg_flush,
             MEM_WB_reg_flush
-        } = {5{exception_or_eret_now}};
+        } = {5{exception_like_now}};
 
     assign reg_write_data_WB =
            mfc0_WB ? cp0_reg : reg_write_data_WB_not_mfc0;

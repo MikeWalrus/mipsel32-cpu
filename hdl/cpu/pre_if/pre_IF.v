@@ -23,10 +23,13 @@ module pre_IF(
 
         input IF_ID_reg_valid_out,
 
-        input exception_or_eret_now,
+        input exception_like_now,
         input exception_now_pre_IF,
         input eret_now_pre_IF,
+        input refetch_now_pre_IF,
+
         input [31:0] cp0_epc,
+        input [31:0] refetch_pc_pre_IF,
 
         input next_pc_is_next,
 
@@ -42,7 +45,7 @@ module pre_IF(
     assign inst_sram_req =
            _pre_IF_reg_valid
            & _pre_IF_reg_allow_out
-           & !exception_or_eret_now
+           & !exception_like_now
            & !exception_pre_IF;
 
     assign inst_sram_wr = 1'b0;
@@ -86,7 +89,7 @@ module pre_IF(
     end
 
     wire should_discard_instruction =
-         exception_or_eret_now & (
+         exception_like_now & (
              // the address is accepted in pre-IF
              (inst_sram_req & inst_sram_addr_ok)
              || // or
@@ -115,6 +118,8 @@ module pre_IF(
             curr_pc_pre_IF = 32'hBFC0_0380;
         else if (eret_now_pre_IF)
             curr_pc_pre_IF = cp0_epc;
+        else if (refetch_now_pre_IF)
+            curr_pc_pre_IF = refetch_pc_pre_IF;
         else if (delay_slot_miss || delay_slot_have_missed)
             // We've missed the delay slot, so we request for the instruction
             // of the delay slot in this cycle, and request for the
