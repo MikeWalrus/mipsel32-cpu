@@ -1,21 +1,25 @@
 cpu_dir := hdl/cpu
 cpu_source := $(wildcard $(cpu_dir)/*.v) $(wildcard $(cpu_dir)/*/*.v)
-soc_axi_source := $(wildcard hdl/soc/axi/*.v)
 
 verilog-axi_source := $(addprefix \
-	sim/verilog-axi/rtl/, axi_ram.v axi_crossbar.v \
+	sim/axi/verilog-axi/rtl/, axi_ram.v axi_crossbar.v \
 	axi_crossbar_wr.v axi_crossbar_addr.v \
 	axi_crossbar_rd.v arbiter.v axi_register_wr.v \
 	axi_register_rd.v priority_encoder.v \
 )
+soc_axi_source := $(wildcard hdl/soc/axi/*.v)
+soc_axi_sim_source := $(verilog-axi_source) $(wildcard sim/axi/*.v)
 
-soc_axi_sim_source := $(wildcard sim/*.v) $(verilog-axi_source)
+soc_sram_source := $(wildcard hdl/soc/sram-like/*.v)
+soc_sram_sim_source := $(wildcard sim/sram-like/*.v)
 
 all: cpu_axi_sim
 
-cpu_axi_sim: $(design_source) $(sim_source)
+.SECONDEXPANSION:
+cpu_%_sim: $(cpu_source) $$(soc_$$*_source) $$(soc_$$*_sim_source)
 	iverilog -Wall -o $@ -Ihdl/include $(ARGS) -DIVERILOG \
-		-DSIMULATION $(cpu_source) $(soc_axi_source) $(soc_axi_sim_source)
+		-DSIMULATION $^
+		
 
 .INTERMEDIATE:
 %_test: testbench/%_test.v

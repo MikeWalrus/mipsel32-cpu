@@ -6,5 +6,6 @@ golden_trace.txt
 *.lx2
 
 cpu_axi_sim
+cpu_sram_sim
 div_test
 tlb_test
