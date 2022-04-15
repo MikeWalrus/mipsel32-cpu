@@ -21,6 +21,7 @@ module cp0 #
         input [31:0] badvaddr_in,
         input tlbp,
         input [TLBNUM_WIDTH:0] tlbp_result,
+        input tlbr,
 
         output reg [31:0] reg_out,
 
@@ -34,7 +35,34 @@ module cp0 #
 
         output reg exception_now,
         output eret_now,
-        output refetch_now
+        output refetch_now,
+
+        // TLB write port
+        output  [$clog2(TLBNUM)-1:0] w_index,
+        output  [18:0]               w_vpn2,
+        output  [7:0]                w_asid,
+        output                       w_g,
+        output  [19:0]               w_pfn0,
+        output  [2:0]                w_c0,
+        output                       w_d0,
+        output                       w_v0,
+        output  [19:0]               w_pfn1,
+        output  [2:0]                w_c1,
+        output                       w_d1,
+        output                       w_v1,
+        // TLB read port
+        output  [$clog2(TLBNUM)-1:0] r_index,
+        input  [18:0]                r_vpn2,
+        input  [7:0]                 r_asid,
+        input                        r_g,
+        input  [19:0]                r_pfn0,
+        input  [2:0]                 r_c0,
+        input                        r_d0,
+        input                        r_v0,
+        input  [19:0]                r_pfn1,
+        input  [2:0]                 r_c1,
+        input                        r_d1,
+        input                        r_v1
     );
     wire eret = exception_like & exccode == `ERET;
     wire refetch = exception_like & exccode == `REFETCH;
@@ -178,29 +206,48 @@ module cp0 #
         end
     end
 
-    reg [19:0] entry_lo_fpn [1:0];
+    reg [19:0] entry_lo_pfn [1:0];
     reg [2:0] entry_lo_c [1:0];
     reg entry_lo_d [1:0];
     reg entry_lo_v [1:0];
     reg entry_lo_g [1:0];
     wire [31:0] entry_lo [1:0];
 
+    wire [19:0] r_pfn [1:0];
+    wire [2:0] r_c [1:0];
+    wire r_d [1:0];
+    wire r_v [1:0];
+
+    assign r_pfn[0] = r_pfn0;
+    assign r_pfn[1] = r_pfn1;
+    assign r_c[0] = r_c0;
+    assign r_c[1] = r_c1;
+    assign r_d[0] = r_d0;
+    assign r_d[1] = r_d1;
+    assign r_v[0] = r_v0;
+    assign r_v[1] = r_v1;
+
     genvar i;
     for (i = 0; i < 2; i = i + 1) begin
         assign entry_lo[i] =
                {
                    6'b0,
-                   entry_lo_fpn[i],
+                   entry_lo_pfn[i],
                    entry_lo_c[i],
                    entry_lo_d[i],
                    entry_lo_v[i],
                    entry_lo_g[i]
                };
         always @(posedge clk) begin
-            //TODO: TLB instructions
-            if (wen && reg_num == `ENTRYLO0+i[4:0]) begin
+            if (tlbr) begin
+                entry_lo_pfn[i] <= r_pfn[i];
+                entry_lo_c[i] <= r_c[i];
+                entry_lo_d[i] <= r_d[i];
+                entry_lo_v[i] <= r_v[i];
+                entry_lo_g[i] <= r_g;
+            end else if (wen && reg_num == `ENTRYLO0+i[4:0]) begin
                 {
-                    entry_lo_fpn[i],
+                    entry_lo_pfn[i],
                     entry_lo_c[i],
                     entry_lo_d[i],
                     entry_lo_v[i],
@@ -214,11 +261,29 @@ module cp0 #
     // reg [7:0] entry_hi_asid;
     wire [31:0] entry_hi = {entry_hi_vpn2, 5'b0, entry_hi_asid};
     always @(posedge clk) begin
-        if (wen & reg_num == `ENTRYHI) begin
+        if (tlbr) begin
+            entry_hi_vpn2 <= r_vpn2;
+            entry_hi_asid <= r_asid;
+        end else if (wen & reg_num == `ENTRYHI) begin
             entry_hi_vpn2 <= reg_in[31:13];
             entry_hi_asid <= reg_in[7:0];
         end
     end
+
+    assign w_index = index_index;
+    assign w_vpn2 = entry_hi_vpn2;
+    assign w_asid = entry_hi_asid;
+    assign w_g = entry_lo_g[0] & entry_lo_g[1];
+    assign w_pfn0 = entry_lo_pfn[0];
+    assign w_c0 = entry_lo_c[0];
+    assign w_d0 = entry_lo_d[0];
+    assign w_v0 = entry_lo_v[0];
+    assign w_pfn1 = entry_lo_pfn[1];
+    assign w_c1 = entry_lo_c[1];
+    assign w_d1 = entry_lo_d[1];
+    assign w_v1 = entry_lo_v[1];
+
+    assign r_index = index_index;
 
     always @(*) begin
         case (reg_num)

@@ -66,7 +66,9 @@ module control(
         output exc_reserved,
         output exc_break,
         output eret,
-        output tlbp
+        output tlbp,
+        output tlbwi,
+        output tlbr
     );
     wire is_R_type = opcode == 6'b000000;
     wire imm_arith;
@@ -129,8 +131,10 @@ module control(
     assign mtc0 = cp0 & rs == 5'b00100;
     assign mfc0 = cp0 & rs == 5'b00000;
     wire co = rs[4] == 1;
-    assign eret = cp0 & co & (func == 6'b011000);
-    assign tlbp = cp0 & co & (func == 6'b001000);
+    assign eret =  cp0 & co & (func == 6'b011000);
+    assign tlbp =  cp0 & co & (func == 6'b001000);
+    assign tlbwi = cp0 & co & (func == 6'b000010);
+    assign tlbr =  cp0 & co & (func == 6'b000001);
 
     wire is_load = |{is_lw, is_lb, is_lbu, is_lh, is_lhu, is_lwl, is_lwr};
     wire is_store = |{is_sw, is_sb, is_sh, is_swl, is_swr};

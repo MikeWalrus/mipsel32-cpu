@@ -486,6 +486,14 @@ module cpu_sram #
     wire tlbp_EX;
     wire tlbp_MEM;
     wire tlbp_WB;
+    wire tlbwi_ID;
+    wire tlbwi_EX;
+    wire tlbwi_MEM;
+    wire tlbwi_WB;
+    wire tlbr_ID;
+    wire tlbr_EX;
+    wire tlbr_MEM;
+    wire tlbr_WB;
 
     // pipeline registers
     pipeline_reg
@@ -586,7 +594,7 @@ module cpu_sram #
                           5 + 9 + 7 +
                           8 + 1 + 5 +
                           32 + 1 + 1 +
-                          1
+                          1 + 1 + 1
                          ))
                  ID_EX_reg(
                      .clk(clk),
@@ -605,7 +613,7 @@ module cpu_sram #
                              shamt_ID, mult_div_ctrl_ID, mem_ctrl_ID,
                              cp0_signals_ID, exception_ID, exccode_ID,
                              badvaddr_ID, mem_en_ID, mem_wen_ID,
-                             tlbp_ID
+                             tlbp_ID, tlbwi_ID, tlbr_ID
                          }),
                      .out(
                          {
@@ -614,7 +622,7 @@ module cpu_sram #
                              shamt_EX, mult_div_ctrl_EX, mem_ctrl_EX,
                              cp0_signals_EX, exception_EX_old, exccode_EX_old,
                              badvaddr_EX_old, mem_en_EX, mem_wen_EX,
-                             tlbp_EX
+                             tlbp_EX, tlbwi_EX, tlbr_EX
                          }),
                      .valid(ID_EX_reg_valid)
                  );
@@ -627,7 +635,7 @@ module cpu_sram #
                           32 +
                           1 +
                           5 +
-                          1))
+                          1 + 1 + 1))
                  EX_MEM_reg(
                      .clk(clk),
                      .reset(reset),
@@ -648,7 +656,7 @@ module cpu_sram #
                              badvaddr_EX,
                              data_sram_req,
                              tlbp_result_EX,
-                             tlbp_EX
+                             tlbp_EX, tlbwi_EX, tlbr_EX
                          }),
                      .out(
                          {
@@ -660,12 +668,12 @@ module cpu_sram #
                              badvaddr_MEM,
                              data_sram_req_MEM,
                              tlbp_result_MEM,
-                             tlbp_MEM
+                             tlbp_MEM, tlbwi_MEM, tlbr_MEM
                          }),
                      .valid(EX_MEM_reg_valid)
                  );
 
-    pipeline_reg #(.WIDTH(32 + 38 + 32 + 8 + 1 + 5 + 32 + 5 + 1))
+    pipeline_reg #(.WIDTH(32 + 38 + 32 + 8 + 1 + 5 + 32 + 5 + 1 + 1 + 1))
                  MEM_WB_reg(
                      .clk(clk),
                      .reset(reset),
@@ -687,7 +695,9 @@ module cpu_sram #
                              exccode_MEM,
                              badvaddr_MEM,
                              tlbp_result_MEM,
-                             tlbp_MEM
+                             tlbp_MEM,
+                             tlbwi_MEM,
+                             tlbr_MEM
                          }),
                      .out(
                          {
@@ -699,7 +709,9 @@ module cpu_sram #
                              exccode_WB_old,
                              badvaddr_WB,
                              tlbp_result_WB,
-                             tlbp_WB
+                             tlbp_WB,
+                             tlbwi_WB,
+                             tlbr_WB
                          }),
                      .valid(MEM_WB_reg_valid)
                  );
@@ -728,7 +740,7 @@ module cpu_sram #
     wire s1_v;
 
     // write port
-    wire we; // write enable
+    wire tlb_we; // write enable
     wire [$clog2(TLBNUM)-1:0] w_index;
     wire [18:0] w_vpn2;
     wire [7:0] w_asid;
@@ -781,7 +793,7 @@ module cpu_sram #
                 .s1_d(s1_d),
                 .s1_v(s1_v),
 
-                .we(we),
+                .we(tlb_we),
                 .w_index(w_index),
                 .w_vpn2(w_vpn2),
                 .w_asid(w_asid),
@@ -1010,7 +1022,9 @@ module cpu_sram #
                 .exc_reserved(exc_reserved_ID),
                 .exc_break(exc_break_ID),
                 .eret(eret_ID),
-                .tlbp(tlbp_ID)
+                .tlbp(tlbp_ID),
+                .tlbwi(tlbwi_ID),
+                .tlbr(tlbr_ID)
             );
 
     always @(posedge clk) begin
@@ -1296,8 +1310,8 @@ module cpu_sram #
                           .odd_page(s1_odd_page),
                           .pfn(s1_pfn)
                       );
-    assign s1_vpn2 = tlbp_EX ? s1_vpn2_req : cp0_entry_hi_vpn2;
-    assign tlbp_result_EX = {s1_found, s1_index};
+    assign s1_vpn2 = tlbp_EX ? cp0_entry_hi_vpn2 : s1_vpn2_req;
+    assign tlbp_result_EX = {~s1_found, s1_index};
 
     assign badvaddr_EX = exception_EX_old ? badvaddr_EX_old : alu_result;
 
@@ -1408,8 +1422,9 @@ module cpu_sram #
             .interrupt(exc_int),
             .exccode(exccode_WB),
             .badvaddr_in(badvaddr_WB),
-            .tlbp(tlbp_WB),
+            .tlbp(tlbp_WB & ~exception_WB & MEM_WB_reg_valid),
             .tlbp_result(tlbp_result_WB),
+            .tlbr(tlbr_WB & ~exception_WB & MEM_WB_reg_valid),
 
             .reg_out(cp0_reg),
 
@@ -1423,8 +1438,35 @@ module cpu_sram #
 
             .exception_now(exception_now),
             .eret_now(eret_now),
-            .refetch_now(refetch_now)
+            .refetch_now(refetch_now),
+
+            .w_index(w_index),
+            .w_vpn2(w_vpn2),
+            .w_asid(w_asid),
+            .w_g(w_g),
+            .w_pfn0(w_pfn0),
+            .w_c0(w_c0),
+            .w_d0(w_d0),
+            .w_v0(w_v0),
+            .w_pfn1(w_pfn1),
+            .w_c1(w_c1),
+            .w_d1(w_d1),
+            .w_v1(w_v1),
+
+            .r_index(r_index),
+            .r_vpn2(r_vpn2),
+            .r_asid(r_asid),
+            .r_g(r_g),
+            .r_pfn0(r_pfn0),
+            .r_c0(r_c0),
+            .r_d0(r_d0),
+            .r_v0(r_v0),
+            .r_pfn1(r_pfn1),
+            .r_c1(r_c1),
+            .r_d1(r_d1),
+            .r_v1(r_v1)
         );
+    assign tlb_we = tlbwi_WB & ~exception_WB & MEM_WB_reg_valid;
 
     assign {
             pre_IF_IF_reg_flush,

@@ -33,4 +33,4 @@ run_%: %
 	vvp $? -lxt2
 
 clean:
-	-rm cpu_sim dump.lx2
+	-rm cpu_sram_sim cpu_axi_sim dump.lx2
