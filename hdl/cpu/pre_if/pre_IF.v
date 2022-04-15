@@ -1,8 +1,13 @@
 `include "cp0.vh"
-module pre_IF(
+module pre_IF #
+(
+    parameter TLB = 1
+)
+(
         input clk,
         input reset,
 
+        // sram-like
         output inst_sram_req,
         output inst_sram_wr,
         output [1:0] inst_sram_size,
@@ -12,17 +17,21 @@ module pre_IF(
         input inst_sram_addr_ok,
         input inst_sram_data_ok,
 
+        // pipeline register: pre_IF
         input _pre_IF_reg_valid,
         input _pre_IF_reg_allow_out,
         output _pre_IF_reg_stall,
         input leaving_pre_IF,
 
+        // pipeline register: pre_IF to IF
         input pre_IF_IF_reg_valid,
         input pre_IF_IF_reg_stall_wait_for_data,
         output pre_IF_IF_reg_stall_discard_instruction,
 
+        // pipeline register: IF to ID
         input IF_ID_reg_valid_out,
 
+        // exception-like events
         input exception_like_now,
         input exception_now_pre_IF,
         input eret_now_pre_IF,
@@ -31,14 +40,20 @@ module pre_IF(
         input [31:0] cp0_epc,
         input [31:0] refetch_pc_pre_IF,
 
+        output exception_pre_IF,
+        output [4:0] exccode_pre_IF,
+
+        // PC
         input next_pc_is_next,
 
         input [31:0] next_pc_without_exception,
         input [31:0] curr_pc_IF,
         output reg [31:0] curr_pc_pre_IF,
 
-        output exception_pre_IF,
-        output [4:0] exccode_pre_IF
+        // TLB
+        output [18:0] vpn2,
+        output odd_page,
+        input [19:0] pfn
     );
     assign inst_sram_size = 2'd2;
     assign inst_sram_wstrb = 4'b1111;
@@ -49,9 +64,13 @@ module pre_IF(
            & !exception_pre_IF;
 
     assign inst_sram_wr = 1'b0;
-    addr_trans addr_trans_inst(
+    addr_trans #(.TLB(TLB)) addr_trans_inst(
                    .virt_addr(curr_pc_pre_IF),
-                   .phy_addr(inst_sram_addr)
+                   .phy_addr(inst_sram_addr),
+
+                   .vpn2(vpn2),
+                   .odd_page(odd_page),
+                   .pfn(pfn)
                );
 
     // We misses the delay slot if:

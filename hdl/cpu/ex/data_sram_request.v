@@ -1,4 +1,8 @@
-module data_sram_request(
+module data_sram_request #
+(
+    parameter TLB = 1
+)
+(
         output data_sram_req,
         output data_sram_wr,
         output [1:0] data_sram_size,
@@ -26,7 +30,12 @@ module data_sram_request(
 
         output mem_addr_unaligned,
         output ID_EX_reg_stall_mem_not_ready,
-        output [1:0] byte_offset_EX
+        output [1:0] byte_offset_EX,
+
+        // TLB
+        output [18:0] vpn2,
+        output odd_page,
+        input [19:0] pfn
     );
     assign data_sram_req = ID_EX_reg_valid
            & (mem_en_EX | mem_wen_EX)
@@ -101,9 +110,13 @@ module data_sram_request(
                        .unaligned(mem_addr_unaligned)
                    );
 
-    addr_trans addr_trans_data(
+    addr_trans #(.TLB(TLB)) addr_trans_data(
                    .virt_addr(virt_addr),
-                   .phy_addr(data_sram_addr)
+                   .phy_addr(data_sram_addr),
+
+                   .vpn2(vpn2),
+                   .odd_page(odd_page),
+                   .pfn(pfn)
                );
 
     assign byte_offset_EX = data_sram_addr[1:0];
