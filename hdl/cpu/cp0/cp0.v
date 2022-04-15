@@ -19,13 +19,18 @@ module cp0 #
         input [5:0] interrupt,
         input [4:0] exccode,
         input [31:0] badvaddr_in,
+        input tlbp,
+        input [TLBNUM_WIDTH:0] tlbp_result,
 
         output reg [31:0] reg_out,
-        output [31:0] epc_out,
-        output [7:0] cause_ip_out,
-        output [7:0] status_im_out,
-        output status_ie_out,
-        output status_exl_out,
+
+        output reg [31:0] epc,
+        output reg [7:0] cause_ip,
+        output reg [7:0] status_im,
+        output reg status_ie,
+        output reg status_exl,
+        output reg [18:0] entry_hi_vpn2,
+        output reg [7:0] entry_hi_asid,
 
         output reg exception_now,
         output eret_now,
@@ -35,12 +40,9 @@ module cp0 #
     wire refetch = exception_like & exccode == `REFETCH;
     wire exception = exception_like & ~eret & ~refetch;
     wire status_bev = 1'b1;
-    reg [7:0] status_im;
-    assign status_im_out = status_im;
-    reg status_exl;
-    assign status_exl_out = status_exl;
-    reg status_ie;
-    assign status_ie_out = status_ie;
+    // reg [7:0] status_im;
+    // reg status_exl;
+    // reg status_ie;
     wire [31:0] status =
          {
              {9{1'b0}},
@@ -71,8 +73,7 @@ module cp0 #
 
     reg cause_bd;
     reg cause_ti;
-    reg [7:0] cause_ip;
-    assign cause_ip_out = cause_ip;
+    // reg [7:0] cause_ip;
     reg [4:0] cause_exccode;
     wire [31:0] cause =
          {
@@ -120,8 +121,7 @@ module cp0 #
             cause_exccode <= exccode;
     end
 
-    reg [31:0] epc;
-    assign epc_out = epc;
+    // reg [31:0] epc;
     wire [31:0] epc_next = is_delay_slot ? pc - 32'd4 : pc;
     always @(posedge clk) begin
         if (exception & !status_exl) begin
@@ -168,11 +168,12 @@ module cp0 #
     wire [31:0] index = {index_p, {32-1-TLBNUM_WIDTH{1'b0}}, index_index};
 
     always @(posedge clk) begin
-        //TODO: TLB instructions
         if (reset) begin
             index_p <= 0;
-        end
-        if (wen && reg_num == `INDEX) begin
+        end else if (tlbp) begin
+            index_p <= tlbp_result[TLBNUM_WIDTH];
+            index_index <= tlbp_result[TLBNUM_WIDTH-1:0];
+        end else if (wen && reg_num == `INDEX) begin
             index_index <= reg_in[TLBNUM_WIDTH-1:0];
         end
     end
@@ -209,6 +210,16 @@ module cp0 #
         end
     end
 
+    // reg [18:0] entry_hi_vpn2;
+    // reg [7:0] entry_hi_asid;
+    wire [31:0] entry_hi = {entry_hi_vpn2, 5'b0, entry_hi_asid};
+    always @(posedge clk) begin
+        if (wen & reg_num == `ENTRYHI) begin
+            entry_hi_vpn2 <= reg_in[31:13];
+            entry_hi_asid <= reg_in[7:0];
+        end
+    end
+
     always @(*) begin
         case (reg_num)
             `INDEX:
@@ -217,6 +228,8 @@ module cp0 #
                 reg_out = entry_lo[0];
             `ENTRYLO1:
                 reg_out = entry_lo[1];
+            `ENTRYHI:
+                reg_out = entry_hi;
             `STATUS:
                 reg_out = status;
             `CAUSE:

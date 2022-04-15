@@ -1,4 +1,5 @@
 `include "alu.vh"
+`include "cp0.vh"
 module control(
         input is_IF_ID_valid,
         input [5:0] opcode,
@@ -64,7 +65,8 @@ module control(
         output exc_syscall,
         output exc_reserved,
         output exc_break,
-        output eret
+        output eret,
+        output tlbp
     );
     wire is_R_type = opcode == 6'b000000;
     wire imm_arith;
@@ -126,8 +128,9 @@ module control(
     wire cp0 = opcode == 6'b010000;
     assign mtc0 = cp0 & rs == 5'b00100;
     assign mfc0 = cp0 & rs == 5'b00000;
-    assign eret = cp0 & (rs[4] == 1) & (func == 6'b011000);
-
+    wire co = rs[4] == 1;
+    assign eret = cp0 & co & (func == 6'b011000);
+    assign tlbp = cp0 & co & (func == 6'b001000);
 
     wire is_load = |{is_lw, is_lb, is_lbu, is_lh, is_lhu, is_lwl, is_lwr};
     wire is_store = |{is_sw, is_sb, is_sh, is_swl, is_swr};
