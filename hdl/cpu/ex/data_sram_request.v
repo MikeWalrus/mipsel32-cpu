@@ -11,7 +11,7 @@ module data_sram_request #
         output [31:0] data_sram_wdata,
         input data_sram_addr_ok,
 
-        input mem_en_EX,
+        input mem_ren_EX,
         input mem_wen_EX,
 
         input [31:0] data,
@@ -35,10 +35,17 @@ module data_sram_request #
         // TLB
         output [18:0] vpn2,
         output odd_page,
-        input [19:0] pfn
+        input [19:0] pfn,
+        input found,
+        input v,
+        input d,
+
+        output tlb_refill,
+        output tlb_error,
+        output tlb_mod
     );
     assign data_sram_req = ID_EX_reg_valid
-           & (mem_en_EX | mem_wen_EX)
+           & (mem_ren_EX | mem_wen_EX)
            // avoid sending multiple requests when stalling:
            & ID_EX_reg_allow_out
            // avoid sending request when exceptions have happened:
@@ -110,14 +117,19 @@ module data_sram_request #
                        .unaligned(mem_addr_unaligned)
                    );
 
+    wire virt_mapped;
     addr_trans #(.TLB(TLB)) addr_trans_data(
                    .virt_addr(virt_addr),
                    .phy_addr(data_sram_addr),
+                   .tlb_mapped(virt_mapped),
 
                    .vpn2(vpn2),
                    .odd_page(odd_page),
                    .pfn(pfn)
                );
+    assign tlb_refill = virt_mapped & ~found;
+    assign tlb_error = virt_mapped & (mem_ren_EX | mem_wen_EX) & ~(found & v);
+    assign tlb_mod = virt_mapped & mem_wen_EX & (found & v & ~d);
 
     assign byte_offset_EX = data_sram_addr[1:0];
 

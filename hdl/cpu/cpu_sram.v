@@ -361,6 +361,7 @@ module cpu_sram #
     wire eret_now_pre_IF;
     wire refetch_now_pre_IF;
     wire exception_like_now = exception_now | eret_now | refetch_now;
+    wire tlb_refill_now_pre_IF;
 
     wire [31:0] refetch_pc = curr_pc_WB;
     wire [31:0] refetch_pc_pre_IF;
@@ -477,6 +478,22 @@ module cpu_sram #
     assign exccode_MEM = exccode_MEM_old;
     assign exccode_WB = exccode_WB_old;
 
+    wire tlb_refill_pre_IF;
+    wire tlb_refill_IF;
+    wire tlb_refill_ID;
+    wire tlb_refill_EX_old; // from ID
+    wire tlb_refill_EX;
+    wire tlb_refill_MEM;
+    wire tlb_refill_WB;
+
+    wire [18:0] tlb_error_vpn2_pre_IF;
+    wire [18:0] tlb_error_vpn2_IF;
+    wire [18:0] tlb_error_vpn2_ID;
+    wire [18:0] tlb_error_vpn2_EX_old; // from ID
+    wire [18:0] tlb_error_vpn2_EX;
+    wire [18:0] tlb_error_vpn2_MEM;
+    wire [18:0] tlb_error_vpn2_WB;
+
     wire exc_syscall_ID;
     wire exc_reserved_ID;
     wire exc_break_ID;
@@ -498,7 +515,7 @@ module cpu_sram #
     // pipeline registers
     pipeline_reg
         #(
-            .WIDTH(3 + 32)
+            .WIDTH(3 + 32 + 1)
         )
         _pre_IF_reg(
             .clk(clk),
@@ -517,22 +534,24 @@ module cpu_sram #
                     exception_now,
                     eret_now,
                     refetch_now,
-                    refetch_pc
+                    refetch_pc,
+                    tlb_refill_WB
                 }),
             .out(
                 {
                     exception_now_pre_IF,
                     eret_now_pre_IF,
                     refetch_now_pre_IF,
-                    refetch_pc_pre_IF
+                    refetch_pc_pre_IF,
+                    tlb_refill_now_pre_IF
                 })
         );
 
     pipeline_reg
         #(
-            .WIDTH(32 + 1 + 5),
+            .WIDTH(32 + 1 + 5 + 1 + 19),
             .RESET(1),
-            .RESET_VALUE({32'hBFC0_0000 - 32'd4, 6'bxxxxxx})
+            .RESET_VALUE({32'hBFC0_0000 - 32'd4, 7'bxxxxxxx, 19'HXXX})
         )
         pre_IF_IF_reg(
             .clk(clk),
@@ -550,17 +569,21 @@ module cpu_sram #
                 {
                     curr_pc_pre_IF,
                     exception_pre_IF,
-                    exccode_pre_IF
+                    exccode_pre_IF,
+                    tlb_refill_pre_IF,
+                    tlb_error_vpn2_pre_IF
                 }),
             .out(
                 {
                     curr_pc_IF,
                     exception_IF_old,
-                    exccode_IF_old
+                    exccode_IF_old,
+                    tlb_refill_IF,
+                    tlb_error_vpn2_IF
                 })
         );
 
-    pipeline_reg #(.WIDTH(32 + 32 + 1 + 5 + 32)) IF_ID_reg(
+    pipeline_reg #(.WIDTH(32 + 32 + 1 + 5 + 32 + 1 + 19)) IF_ID_reg(
                      .clk(clk),
                      .reset(reset),
                      .stall(IF_ID_reg_stall),
@@ -576,7 +599,9 @@ module cpu_sram #
                              instruction_IF,
                              exception_IF,
                              exccode_IF,
-                             badvaddr_IF
+                             badvaddr_IF,
+                             tlb_refill_IF,
+                             tlb_error_vpn2_IF
                          }),
                      .out(
                          {
@@ -584,7 +609,9 @@ module cpu_sram #
                              instruction_ID,
                              exception_ID_old,
                              exccode_ID_old,
-                             badvaddr_ID
+                             badvaddr_ID,
+                             tlb_refill_ID,
+                             tlb_error_vpn2_ID
                          }),
                      .valid(IF_ID_reg_valid)
                  );
@@ -594,7 +621,9 @@ module cpu_sram #
                           5 + 9 + 7 +
                           8 + 1 + 5 +
                           32 + 1 + 1 +
-                          1 + 1 + 1
+                          1 + 1 + 1 +
+                          1 +
+                          19
                          ))
                  ID_EX_reg(
                      .clk(clk),
@@ -613,7 +642,9 @@ module cpu_sram #
                              shamt_ID, mult_div_ctrl_ID, mem_ctrl_ID,
                              cp0_signals_ID, exception_ID, exccode_ID,
                              badvaddr_ID, mem_en_ID, mem_wen_ID,
-                             tlbp_ID, tlbwi_ID, tlbr_ID
+                             tlbp_ID, tlbwi_ID, tlbr_ID,
+                             tlb_refill_ID,
+                             tlb_error_vpn2_ID
                          }),
                      .out(
                          {
@@ -622,7 +653,9 @@ module cpu_sram #
                              shamt_EX, mult_div_ctrl_EX, mem_ctrl_EX,
                              cp0_signals_EX, exception_EX_old, exccode_EX_old,
                              badvaddr_EX_old, mem_en_EX, mem_wen_EX,
-                             tlbp_EX, tlbwi_EX, tlbr_EX
+                             tlbp_EX, tlbwi_EX, tlbr_EX,
+                             tlb_refill_EX_old,
+                             tlb_error_vpn2_EX_old
                          }),
                      .valid(ID_EX_reg_valid)
                  );
@@ -635,7 +668,9 @@ module cpu_sram #
                           32 +
                           1 +
                           5 +
-                          1 + 1 + 1))
+                          1 + 1 + 1 +
+                          1 +
+                          19))
                  EX_MEM_reg(
                      .clk(clk),
                      .reset(reset),
@@ -656,7 +691,9 @@ module cpu_sram #
                              badvaddr_EX,
                              data_sram_req,
                              tlbp_result_EX,
-                             tlbp_EX, tlbwi_EX, tlbr_EX
+                             tlbp_EX, tlbwi_EX, tlbr_EX,
+                             tlb_refill_EX,
+                             tlb_error_vpn2_EX
                          }),
                      .out(
                          {
@@ -668,12 +705,15 @@ module cpu_sram #
                              badvaddr_MEM,
                              data_sram_req_MEM,
                              tlbp_result_MEM,
-                             tlbp_MEM, tlbwi_MEM, tlbr_MEM
+                             tlbp_MEM, tlbwi_MEM, tlbr_MEM,
+                             tlb_refill_MEM,
+                             tlb_error_vpn2_MEM
                          }),
                      .valid(EX_MEM_reg_valid)
                  );
 
-    pipeline_reg #(.WIDTH(32 + 38 + 32 + 8 + 1 + 5 + 32 + 5 + 1 + 1 + 1))
+    pipeline_reg #(.WIDTH(
+                       32 + 38 + 32 + 8 + 1 + 5 + 32 + 5 + 1 + 1 + 1 + 1 + 19))
                  MEM_WB_reg(
                      .clk(clk),
                      .reset(reset),
@@ -697,7 +737,9 @@ module cpu_sram #
                              tlbp_result_MEM,
                              tlbp_MEM,
                              tlbwi_MEM,
-                             tlbr_MEM
+                             tlbr_MEM,
+                             tlb_refill_MEM,
+                             tlb_error_vpn2_MEM
                          }),
                      .out(
                          {
@@ -711,7 +753,9 @@ module cpu_sram #
                              tlbp_result_WB,
                              tlbp_WB,
                              tlbwi_WB,
-                             tlbr_WB
+                             tlbr_WB,
+                             tlb_refill_WB,
+                             tlb_error_vpn2_WB
                          }),
                      .valid(MEM_WB_reg_valid)
                  );
@@ -858,6 +902,7 @@ module cpu_sram #
                .exception_now_pre_IF(exception_now_pre_IF),
                .eret_now_pre_IF(eret_now_pre_IF),
                .refetch_now_pre_IF(refetch_now_pre_IF),
+               .tlb_refill_now_pre_IF(tlb_refill_now_pre_IF),
 
                .cp0_epc(cp0_epc),
                .refetch_pc_pre_IF(refetch_pc_pre_IF),
@@ -873,9 +918,13 @@ module cpu_sram #
 
                .vpn2(s0_vpn2),
                .odd_page(s0_odd_page),
-               .pfn(s0_pfn)
-           );
+               .pfn(s0_pfn),
+               .found(s0_found),
+               .v(s0_v),
 
+               .tlb_refill(tlb_refill_pre_IF)
+           );
+    assign tlb_error_vpn2_pre_IF = s0_vpn2;
 
     //
     // IF Stage
@@ -926,7 +975,8 @@ module cpu_sram #
     assign pre_IF_IF_reg_stall_wait_for_data =
            instruction_not_available
            & ~instruction_latched_valid
-           & ~(exception_IF & exccode_IF == `EXC_AdEL);
+           & ~(exception_IF & (exccode_IF == `EXC_AdEL
+                               || exccode_IF == `EXC_TLBL));
 
     assign badvaddr_IF = curr_pc_IF;
 
@@ -934,10 +984,10 @@ module cpu_sram #
                           .exception_h(exception_IF_old),
                           .exccode_h(exccode_IF_old),
                           .exception_l(
-                              mtc0_ID & IF_ID_reg_valid
-                              | mtc0_EX & ID_EX_reg_valid
-                              | mtc0_MEM & EX_MEM_reg_valid
-                              | mtc0_WB & MEM_WB_reg_valid
+                              |{mtc0_ID, tlbwi_ID, tlbr_ID} & IF_ID_reg_valid
+                              | |{mtc0_EX, tlbwi_EX, tlbr_EX} & ID_EX_reg_valid
+                              | |{mtc0_MEM, tlbwi_MEM, tlbr_MEM} & EX_MEM_reg_valid
+                              | |{mtc0_WB, tlbwi_WB, tlbr_WB} & MEM_WB_reg_valid
                           ),
                           .exccode_l(`REFETCH),
                           .exception_out(exception_IF),
@@ -1234,16 +1284,6 @@ module cpu_sram #
            );
 
     wire exc_overflow = overflow_en_EX & overflow;
-    wire exception_after_overflow;
-    wire [4:0] eccode_after_overflow;
-    exception_combine overflow_exception(
-                          .exception_h(exception_EX_old),
-                          .exccode_h(exccode_EX_old),
-                          .exception_l(exc_overflow),
-                          .exccode_l(`EXC_Ov),
-                          .exception_out(exception_after_overflow),
-                          .exccode_out(eccode_after_overflow)
-                      );
 
     wire mult_div_complete;
     assign ID_EX_reg_stall_div_not_complete = ~mult_div_complete;
@@ -1274,6 +1314,9 @@ module cpu_sram #
 
     wire mem_addr_unaligned;
     wire [18:0] s1_vpn2_req;
+    wire tlb_refill_d;
+    wire tlb_error_d;
+    wire tlb_mod;
     data_sram_request #(.TLB(TLB)) data_sram_request(
                           .data_sram_req(data_sram_req),
                           .data_sram_wr(data_sram_wr),
@@ -1283,7 +1326,7 @@ module cpu_sram #
                           .data_sram_wdata(data_sram_wdata),
                           .data_sram_addr_ok(data_sram_addr_ok),
 
-                          .mem_en_EX(mem_en_EX),
+                          .mem_ren_EX(mem_en_EX),
                           .mem_wen_EX(mem_wen_EX),
 
                           .data(rt_data_EX),
@@ -1308,22 +1351,45 @@ module cpu_sram #
 
                           .vpn2(s1_vpn2_req),
                           .odd_page(s1_odd_page),
-                          .pfn(s1_pfn)
+                          .pfn(s1_pfn),
+                          .found(s1_found),
+                          .v(s1_v),
+                          .d(s1_d),
+
+                          .tlb_refill(tlb_refill_d),
+                          .tlb_error(tlb_error_d),
+                          .tlb_mod(tlb_mod)
                       );
     assign s1_vpn2 = tlbp_EX ? cp0_entry_hi_vpn2 : s1_vpn2_req;
     assign tlbp_result_EX = {~s1_found, s1_index};
 
     assign badvaddr_EX = exception_EX_old ? badvaddr_EX_old : alu_result;
 
-    exception_combine data_addr_error_exception(
-                          .exception_h(exception_after_overflow),
-                          .exccode_h(eccode_after_overflow),
-                          .exception_l(mem_addr_unaligned),
-                          .exccode_l(mem_wen_EX ? `EXC_AdES : `EXC_AdEL),
-                          .exception_out(exception_EX),
-                          .exccode_out(exccode_EX)
-                      );
-
+    exception_multiple #(.NUM(4))
+                       EX_exceptions(
+                           .exception_old(exception_EX_old),
+                           .exccode_old(exccode_EX_old),
+                           .exceptions(
+                               {
+                                   exc_overflow,
+                                   mem_addr_unaligned,
+                                   tlb_error_d,
+                                   tlb_mod
+                               }),
+                           .exccodes(
+                               {
+                                   `EXC_Ov,
+                                   mem_wen_EX ? `EXC_AdES : `EXC_AdEL,
+                                   mem_wen_EX ? `EXC_TLBS : `EXC_TLBL,
+                                   `EXC_MOD
+                               }),
+                           .exception_out(exception_EX),
+                           .exccode_out(exccode_EX)
+                       );
+    assign tlb_refill_EX =
+           exception_EX_old ? tlb_refill_EX_old : tlb_refill_d;
+    assign tlb_error_vpn2_EX =
+           exception_EX_old ? tlb_error_vpn2_EX_old : s1_vpn2;
 
     //
     // MEM Stage
@@ -1425,6 +1491,7 @@ module cpu_sram #
             .tlbp(tlbp_WB & ~exception_WB & MEM_WB_reg_valid),
             .tlbp_result(tlbp_result_WB),
             .tlbr(tlbr_WB & ~exception_WB & MEM_WB_reg_valid),
+            .tlb_error_vpn2(tlb_error_vpn2_WB),
 
             .reg_out(cp0_reg),
 

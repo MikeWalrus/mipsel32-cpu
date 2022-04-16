@@ -22,6 +22,7 @@ module cp0 #
         input tlbp,
         input [TLBNUM_WIDTH:0] tlbp_result,
         input tlbr,
+        input [18:0] tlb_error_vpn2,
 
         output reg [31:0] reg_out,
 
@@ -261,7 +262,12 @@ module cp0 #
     // reg [7:0] entry_hi_asid;
     wire [31:0] entry_hi = {entry_hi_vpn2, 5'b0, entry_hi_asid};
     always @(posedge clk) begin
-        if (tlbr) begin
+        if (exception & (
+                    exccode == `EXC_TLBL
+                    | exccode == `EXC_TLBS
+                    | exccode == `EXC_MOD)) begin
+            entry_hi_vpn2 <= tlb_error_vpn2;
+        end else if (tlbr) begin
             entry_hi_vpn2 <= r_vpn2;
             entry_hi_asid <= r_asid;
         end else if (wen & reg_num == `ENTRYHI) begin

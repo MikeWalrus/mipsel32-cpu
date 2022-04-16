@@ -5,6 +5,7 @@ module addr_trans #
     (
         input [31:0] virt_addr,
         output [31:0] phy_addr,
+        output tlb_mapped,
 
         // TLB
         output [18:0] vpn2,
@@ -34,8 +35,10 @@ module addr_trans #
     wire [31:0] mapped_addr;
 
     if (!TLB) begin
+        assign tlb_mapped = 0;
         assign mapped_addr = virt_addr;
     end else begin
+        assign tlb_mapped = mapped;
         assign {vpn2, odd_page} = virt_addr[31-:20];
         assign mapped_addr = {pfn, virt_addr[0+:12]};
     end

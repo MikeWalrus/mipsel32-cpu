@@ -1,9 +1,9 @@
 `include "cp0.vh"
 module pre_IF #
-(
-    parameter TLB = 1
-)
-(
+    (
+        parameter TLB = 1
+    )
+    (
         input clk,
         input reset,
 
@@ -36,12 +36,14 @@ module pre_IF #
         input exception_now_pre_IF,
         input eret_now_pre_IF,
         input refetch_now_pre_IF,
+        input tlb_refill_now_pre_IF,
 
         input [31:0] cp0_epc,
         input [31:0] refetch_pc_pre_IF,
 
         output exception_pre_IF,
         output [4:0] exccode_pre_IF,
+        output tlb_refill,
 
         // PC
         input next_pc_is_next,
@@ -53,7 +55,9 @@ module pre_IF #
         // TLB
         output [18:0] vpn2,
         output odd_page,
-        input [19:0] pfn
+        input [19:0] pfn,
+        input found,
+        input v
     );
     assign inst_sram_size = 2'd2;
     assign inst_sram_wstrb = 4'b1111;
@@ -64,9 +68,11 @@ module pre_IF #
            & !exception_pre_IF;
 
     assign inst_sram_wr = 1'b0;
+    wire virt_mapped;
     addr_trans #(.TLB(TLB)) addr_trans_inst(
                    .virt_addr(curr_pc_pre_IF),
                    .phy_addr(inst_sram_addr),
+                   .tlb_mapped(virt_mapped),
 
                    .vpn2(vpn2),
                    .odd_page(odd_page),
@@ -133,8 +139,12 @@ module pre_IF #
     assign pre_IF_IF_reg_stall_discard_instruction = discard_instruction;
 
     always @(*) begin
-        if (exception_now_pre_IF)
-            curr_pc_pre_IF = 32'hBFC0_0380;
+        if (exception_now_pre_IF) begin
+            if (tlb_refill_now_pre_IF)
+                curr_pc_pre_IF = 32'hBFC0_0200;
+            else
+                curr_pc_pre_IF = 32'hBFC0_0380;
+        end
         else if (eret_now_pre_IF)
             curr_pc_pre_IF = cp0_epc;
         else if (refetch_now_pre_IF)
@@ -155,12 +165,24 @@ module pre_IF #
     assign _pre_IF_reg_stall = inst_sram_req & ~inst_sram_addr_ok;
 
     wire inst_addr_error = (curr_pc_pre_IF[1:0] != 2'b00);
-    exception_combine inst_addr_error_exception(
-                          .exception_h(1'b0),
-                          .exccode_h({5{1'bz}}),
-                          .exception_l(inst_addr_error),
-                          .exccode_l(`EXC_AdEL),
-                          .exception_out(exception_pre_IF),
-                          .exccode_out(exccode_pre_IF)
-                      );
+    wire inst_tlb_error = virt_mapped & ~(found & v);
+    assign tlb_refill = ~found;
+    exception_multiple #(.NUM(2)) pre_IF_exceptions(
+                           .exception_old(1'b0),
+                           .exccode_old({5{1'bz}}),
+                           .exceptions(
+                               {
+                                   inst_addr_error,
+                                   inst_tlb_error
+                               }
+                           ),
+                           .exccodes(
+                               {
+                                   `EXC_AdEL,
+                                   `EXC_TLBL
+                               }
+                           ),
+                           .exception_out(exception_pre_IF),
+                           .exccode_out(exccode_pre_IF)
+                       );
 endmodule

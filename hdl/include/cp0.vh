@@ -12,6 +12,9 @@
 `define CONFIG 5'd16
 
 `define EXC_Int 5'h00
+`define EXC_MOD 5'h01
+`define EXC_TLBL 5'h02
+`define EXC_TLBS 5'h03
 `define EXC_AdEL 5'h04
 `define EXC_AdES 5'h05
 `define EXC_Sys 5'h08
