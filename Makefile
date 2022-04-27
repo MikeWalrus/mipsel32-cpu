@@ -20,6 +20,10 @@ all: cpu_axi_sim
 cpu_%_sim: $(cpu_source) $$(soc_$$*_source) $$(soc_$$*_sim_source)
 	iverilog -Wall -o $@ -Ihdl/include $(ARGS) -DIVERILOG \
 		-DSIMULATION $^
+
+cpu_%_verilate: $(cpu_source) $$(soc_$$*_source) $$(soc_$$*_sim_source)
+	verilator --prof-cfuncs --trace-fst --CFLAGS -g -Wno-TIMESCALEMOD -Wno-STMTDLY -Wno-PINMISSING -Wno-UNOPTFLAT -Wno-INITIALDLY -Wno-CASEINCOMPLETE -Wno-LITENDIAN -Wno-WIDTH -Wno-IMPLICIT -DIVERILOG --top-module tb_top -Ihdl/include --cc --exe --build sim_main.cpp $^
+
 		
 .INTERMEDIATE:
 %_test: testbench/%_test.v

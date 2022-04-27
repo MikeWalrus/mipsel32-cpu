@@ -1,4 +1,4 @@
 let dirs = globpath("hdl/cpu", "*/", 0, 1)
-    \+ ["hdl/cpu", "hdl/soc/axi", "sim", "sim/verilog-axi/rtl"]
+    \+ ["hdl/cpu", "hdl/soc/axi", "sim", "sim/axi/verilog-axi/rtl"]
 let g:ale_verilog_verilator_options = "-DIVERILOG -Ihdl/include "
     \ .. join(map(dirs, '"-y " .. v:val'))

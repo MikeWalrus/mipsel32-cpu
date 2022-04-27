@@ -40,9 +40,16 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 `define CONFREG_UART_DATA    soc_lite.u_confreg.write_uart_data
 `define END_PC 32'hbfc00100
 
-module tb_top( );
+module tb_top(
+`ifdef VERILATOR
+    input clk,
+    input resetn
+`endif
+);
+`ifndef VERILATOR
     reg resetn;
     reg clk;
+`endif
 
     //goio
     wire [15:0] led;
@@ -59,9 +66,13 @@ module tb_top( );
     assign btn_step    = 2'd3;
 
     initial begin
+`ifdef VERILATOR
+        $dumpfile("dump.fst");
+`endif
         $dumpvars();
     end
 
+`ifndef VERILATOR
     initial begin
         clk = 1'b0;
         resetn = 1'b0;
@@ -69,6 +80,7 @@ module tb_top( );
         resetn = 1'b1;
     end
     always #5 clk=~clk;
+`endif
     soc_axi_lite_top #(.SIMULATION(1'b1)) soc_lite
                       (
                           .resetn      (resetn     ),
@@ -198,8 +210,8 @@ module tb_top( );
     //monitor test
     initial begin
         $timeformat(-9,0," ns",10);
-        while(!resetn)
-            #5;
+        /* while(!resetn) */
+            /* #5; */
         $display("==============================================================");
         $display("Test begin!");
 

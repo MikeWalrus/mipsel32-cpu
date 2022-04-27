@@ -214,7 +214,8 @@ module axi_wrap_ram(
         #(
             .DATA_WIDTH(32),
             .ADDR_WIDTH(20),
-            .ID_WIDTH(4)
+            .ID_WIDTH(4),
+            .INITIALISE(0)
         )
 `endif
         ram(

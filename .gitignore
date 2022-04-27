@@ -4,8 +4,12 @@ golden_trace.txt
 *.gtkw
 *.vcd
 *.lx2
+*.fst
 
 cpu_axi_sim
 cpu_sram_sim
 div_test
 tlb_test
+
+obj_dir
+compile_commands.json
