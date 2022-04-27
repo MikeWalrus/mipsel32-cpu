@@ -1,5 +1,6 @@
 cpu_dir := hdl/cpu
 cpu_source := $(wildcard $(cpu_dir)/*.v) $(wildcard $(cpu_dir)/*/*.v)
+headers := hdl/include
 
 verilog-axi_source := $(addprefix \
 	sim/axi/verilog-axi/rtl/, axi_ram.v axi_crossbar.v \
@@ -18,11 +19,11 @@ all: cpu_axi_sim
 
 .SECONDEXPANSION:
 cpu_%_sim: $(cpu_source) $$(soc_$$*_source) $$(soc_$$*_sim_source)
-	iverilog -Wall -o $@ -Ihdl/include $(ARGS) -DIVERILOG \
+	iverilog -Wall -o $@ -I$(headers) $(ARGS) -DIVERILOG \
 		-DSIMULATION $^
 
 cpu_%_verilate: $(cpu_source) $$(soc_$$*_source) $$(soc_$$*_sim_source)
-	verilator --prof-cfuncs --trace-fst --CFLAGS -g -Wno-TIMESCALEMOD -Wno-STMTDLY -Wno-PINMISSING -Wno-UNOPTFLAT -Wno-INITIALDLY -Wno-CASEINCOMPLETE -Wno-LITENDIAN -Wno-WIDTH -Wno-IMPLICIT -DIVERILOG --top-module tb_top -Ihdl/include --cc --exe --build sim_main.cpp $^
+	verilator --prof-cfuncs --trace-fst --CFLAGS -g -Wno-TIMESCALEMOD -Wno-STMTDLY -Wno-PINMISSING -Wno-UNOPTFLAT -Wno-INITIALDLY -Wno-CASEINCOMPLETE -Wno-LITENDIAN -Wno-WIDTH -Wno-IMPLICIT -DIVERILOG --top-module tb_top -I$(headers) --cc --exe --build sim_main.cpp $^
 
 		
 .INTERMEDIATE:
@@ -38,3 +39,13 @@ run_%: %
 
 clean:
 	-rm cpu_sram_sim cpu_axi_sim dump.lx2
+
+install_axi_cpu:
+ifndef TARGET_CPU_DIR
+	$(error TARGET_CPU_DIR is not set)
+endif
+	-rm $(TARGET_CPU_DIR)/* -r
+	cp --parents -r $(cpu_source) $(headers) \
+		./hdl/soc/axi/cpu_axi_interface.v \
+		./hdl/soc/axi/mycpu_top.v \
+		$(TARGET_CPU_DIR)
