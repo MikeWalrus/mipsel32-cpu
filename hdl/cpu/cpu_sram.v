@@ -1,7 +1,7 @@
 `include "cp0.vh"
 module cpu_sram #
     (
-        parameter TLB = 1,
+        parameter TLB = 0,
         parameter TLBNUM = 16,
         parameter TLBNUM_WIDTH = $clog2(16)
     )
