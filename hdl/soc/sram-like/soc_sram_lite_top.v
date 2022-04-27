@@ -160,7 +160,7 @@ module soc_sram_lite_top #(parameter SIMULATION=1'b0)
                   .clk              (cpu_clk   ),
                   .resetn           (cpu_resetn),  //low active
 
-                  .exc_int          (6'b0),
+                  .ext_int          (6'b0),
 
                   .inst_sram_req    (cpu_inst_req    ),
                   .inst_sram_wr     (cpu_inst_wr     ),
