@@ -2,7 +2,7 @@ module mycpu_top(
         input aclk,
         input aresetn,
 
-        input [5:0] interrupt,
+        input [5:0] exc_int,
 
         output [3:0] arid,
         output [31:0] araddr,
@@ -73,6 +73,8 @@ module mycpu_top(
     cpu_sram cpu_sram(
                  .clk              (aclk   ),
                  .resetn           (aresetn),  //low active
+
+                 .exc_int          (exc_int),
 
                  .inst_sram_req    (cpu_inst_req    ),
                  .inst_sram_wr     (cpu_inst_wr     ),

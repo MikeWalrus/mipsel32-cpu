@@ -3,6 +3,8 @@ module cpu_sram(
         input clk,
         input resetn,
 
+        input [5:0] exc_int,
+
         output inst_sram_req,
         output inst_sram_wr,
         output [1:0] inst_sram_size,
@@ -1219,7 +1221,7 @@ module cpu_sram(
             .exception(exception_WB & MEM_WB_reg_valid),
             .is_delay_slot(is_delay_slot_WB),
             .pc(curr_pc_WB),
-            .interrupt(6'b0),
+            .interrupt(exc_int),
             .exccode(exccode_WB),
             .badvaddr_in(badvaddr_WB),
             .reg_out(cp0_reg),
