@@ -12,10 +12,12 @@ module mult_div(
         input [31:0] rt_data,
         output reg [31:0] hi,
         output reg [31:0] lo,
+        output [31:0] product,
         output complete
     );
     wire [63:0] unsigned_product = rs_data * rt_data;
     wire [63:0] signed_product = $signed(rs_data) * $signed(rt_data);
+    assign product = signed_product[31:0];
 
     wire div_en = en & (is_div | is_divu);
     wire [31:0] quotient;

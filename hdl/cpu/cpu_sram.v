@@ -106,9 +106,11 @@ module cpu_sram #
     wire is_result_alu_ID;
     wire is_result_lo_ID;
     wire is_result_hi_ID;
+    wire is_result_product_ID;
     wire is_result_alu_EX;
     wire is_result_lo_EX;
     wire is_result_hi_EX;
+    wire is_result_product_EX;
 
     // alu
     wire [11:0] alu_op_ID;
@@ -179,8 +181,8 @@ module cpu_sram #
 
     // multiplication and division control signals
     // that go through pipeline registers
-    wire [8:0] mult_div_ctrl_ID;
-    wire [8:0] mult_div_ctrl_EX;
+    wire [9:0] mult_div_ctrl_ID;
+    wire [9:0] mult_div_ctrl_EX;
     assign mult_div_ctrl_ID = {
                is_div_ID,
                is_divu_ID,
@@ -190,6 +192,7 @@ module cpu_sram #
                lo_wen_ID,
                is_result_lo_ID,
                is_result_hi_ID,
+               is_result_product_ID,
                is_result_alu_ID
            };
     assign {
@@ -201,6 +204,7 @@ module cpu_sram #
             lo_wen_EX,
             is_result_lo_EX,
             is_result_hi_EX,
+            is_result_product_EX,
             is_result_alu_EX
         } = mult_div_ctrl_EX;
 
@@ -618,7 +622,7 @@ module cpu_sram #
 
     pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 +
                           19 + 8 +
-                          5 + 9 + 7 +
+                          5 + 10 + 7 +
                           8 + 1 + 5 +
                           32 + 1 + 1 +
                           1 + 1 + 1 +
@@ -1046,6 +1050,7 @@ module cpu_sram #
                 .is_result_alu(is_result_alu_ID),
                 .is_result_lo(is_result_lo_ID),
                 .is_result_hi(is_result_hi_ID),
+                .is_result_product(is_result_product_ID),
 
                 .mem_b(mem_b_ID),
                 .mem_h(mem_h_ID),
@@ -1289,6 +1294,7 @@ module cpu_sram #
     assign ID_EX_reg_stall_div_not_complete = ~mult_div_complete;
     wire [31:0] hi;
     wire [31:0] lo;
+    wire [31:0] product;
     mult_div mult_div(
                  .clk(clk),
                  .en(~exception_EX_MEM_WB & ID_EX_reg_valid),
@@ -1303,14 +1309,17 @@ module cpu_sram #
                  .rt_data(rt_data_EX),
                  .hi(hi),
                  .lo(lo),
+                 .product(product),
                  .complete(mult_div_complete)
              );
 
+    wire [31:0] result_not_product;
     mux_1h #(.num_port(3)) result_mux (
                .select({is_result_alu_EX, is_result_lo_EX, is_result_hi_EX}),
                .in(    {alu_result      , lo             , hi             }),
-               .out(result_EX)
+               .out(result_not_product)
            );
+    assign result_EX = is_result_product_EX ? product : result_not_product;
 
     wire mem_addr_unaligned;
     wire [18:0] s1_vpn2_req;

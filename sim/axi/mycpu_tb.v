@@ -67,7 +67,7 @@ module tb_top(
 
     initial begin
 `ifdef VERILATOR
-        $dumpfile("dump.fst");
+        $dumpfile("dump.vcd");
 `endif
         $dumpvars();
     end
@@ -161,6 +161,7 @@ module tb_top(
         if(!resetn)begin
             debug_wb_err <= 1'b0;
         end
+`ifndef NOTRACE
         else if(|debug_wb_rf_wen && debug_wb_rf_wnum!=5'd0 && !debug_end && `CONFREG_OPEN_TRACE)begin
             if (  (debug_wb_pc!==ref_wb_pc) || (debug_wb_rf_wnum!==ref_wb_rf_wnum)
                     ||(debug_wb_rf_wdata_v!==ref_wb_rf_wdata_v) )begin
@@ -176,6 +177,7 @@ module tb_top(
                 $finish;
             end
         end
+`endif
     end
 
     //monitor numeric display

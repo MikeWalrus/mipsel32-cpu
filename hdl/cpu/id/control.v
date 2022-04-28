@@ -38,6 +38,7 @@ module control(
         output is_result_alu,
         output is_result_lo,
         output is_result_hi,
+        output is_result_product,
 
         output mem_w,
         output mem_b,
@@ -149,8 +150,8 @@ module control(
 
     assign imm_is_sign_extend = ~(is_andi | is_ori | is_xori);
 
-    assign reg_write = |{is_R_type, is_load, link, imm_arith, mfc0};
-    assign reg_write_addr_is_rd = is_R_type;
+    assign reg_write = |{is_R_type, is_load, link, imm_arith, mfc0, is_mul};
+    assign reg_write_addr_is_rd = is_R_type | is_mul;
     assign reg_write_addr_is_31 = link_31;
     assign reg_write_addr_is_rt = ~reg_write_addr_is_31 & ~reg_write_addr_is_rd;
 
@@ -248,12 +249,14 @@ module control(
 
     assign is_result_hi = is_R_type & func_mfhi;
     assign is_result_lo = is_R_type & func_mflo;
-    assign is_result_alu = ~is_result_lo & ~ is_result_hi;
+    assign is_result_product = is_mul;
+    assign is_result_alu = ~is_result_lo & ~is_result_hi & ~is_result_product;
 
-    assign is_mult = is_R_type & func_mult;
+    assign is_mult = is_R_type & func_mult | is_mul;
     assign is_multu = is_R_type & func_multu;
     assign is_div = is_R_type & func_div;
     assign is_divu = is_R_type & func_divu;
+    wire is_mul = opcode == 6'b011100 & func == 6'b000010;
 
     assign lo_wen = is_R_type & func_mtlo;
     assign hi_wen = is_R_type & func_mthi;
@@ -296,7 +299,8 @@ module control(
                is_swl,
                is_swr,
                is_xori,
-               cp0
+               cp0,
+               is_mul
            };
 
     assign exc_break = is_R_type & func_break;
