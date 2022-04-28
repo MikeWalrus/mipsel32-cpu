@@ -42,18 +42,36 @@ module alu(
 
     wire [31:0] sra_result = $signed(b) >>> shamt;
 
-    assign result =
-           ({32{is_add|is_sub}} & adder_out) |
-           ({32{is_and}}        & (a & b)) |
-           ({32{is_slt}}        & {{31{1'b0}}, adder_out[31] ^ signed_overflow}) |
-           ({32{is_sltu}}       & {{31{1'b0}}, ~cout}) |
-           ({32{is_sll}}        & (b << shamt)) |
-           ({32{is_srl}}        & (b >> shamt)) |
-           ({32{is_sra}}        & sra_result) |
-           ({32{is_lui}}        & {b[15:0],{16{1'b0}}}) |
-           ({32{is_or}}         & (a | b)) |
-           ({32{is_xor}}        & (a ^ b)) |
-           ({32{is_nor}}        & ~(a | b))
-           ;
-
+    mux_1h #(.num_port(11), .data_width(32)) result_mux(
+               .select(
+                   {
+                       is_add | is_sub,
+                       is_and,
+                       is_slt,
+                       is_sltu,
+                       is_sll,
+                       is_srl,
+                       is_sra,
+                       is_lui,
+                       is_or,
+                       is_xor,
+                       is_nor
+                   }),
+               .in(
+                   {
+                       adder_out,
+                       a & b,
+                       {{31{1'b0}}, adder_out[31] ^ signed_overflow},
+                       {{31{1'b0}}, ~cout},
+                       (b << shamt),
+                       (b >> shamt),
+                       sra_result,
+                       {b[15:0],{16{1'b0}}},
+                       (a | b),
+                       (a ^ b),
+                       ~(a | b)
+                   }
+               ),
+               .out(result)
+           );
 endmodule
