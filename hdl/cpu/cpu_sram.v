@@ -1133,7 +1133,7 @@ module cpu_sram #
                .in(
                    {
                        rs_data_ID_no_forward,
-                       result_EX,
+                       result_not_product_EX,
                        reg_write_data_MEM,
                        reg_write_data_WB
                    }),
@@ -1156,7 +1156,7 @@ module cpu_sram #
                .in(
                    {
                        rt_data_ID_no_forward,
-                       result_EX,
+                       result_not_product_EX,
                        reg_write_data_MEM,
                        reg_write_data_WB
                    }),
@@ -1203,6 +1203,7 @@ module cpu_sram #
                       .mem_wait_for_data(EX_MEM_reg_stall_wait_for_data),
                       .mfc0_EX(mfc0_EX),
                       .mfc0_MEM(mfc0_MEM),
+                      .is_result_product_EX(is_result_product_EX),
 
                       .rs_data_ID_is_from_ex(rs_data_ID_is_from_ex),
                       .rt_data_ID_is_from_ex(rt_data_ID_is_from_ex),
@@ -1313,13 +1314,13 @@ module cpu_sram #
                  .complete(mult_div_complete)
              );
 
-    wire [31:0] result_not_product;
+    wire [31:0] result_not_product_EX;
     mux_1h #(.num_port(3)) result_mux (
                .select({is_result_alu_EX, is_result_lo_EX, is_result_hi_EX}),
                .in(    {alu_result      , lo             , hi             }),
-               .out(result_not_product)
+               .out(result_not_product_EX)
            );
-    assign result_EX = is_result_product_EX ? product : result_not_product;
+    assign result_EX = is_result_product_EX ? product : result_not_product_EX;
 
     wire mem_addr_unaligned;
     wire [18:0] s1_vpn2_req;
