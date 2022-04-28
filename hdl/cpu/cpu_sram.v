@@ -1260,12 +1260,14 @@ module cpu_sram #
     wire [31:0] alu_result;
     wire overflow;
 
+    wire [31:0] alu_address_out;
     alu alu(
             .op(alu_op_EX),
             .a(alu_a),
             .b(alu_b),
             .overflow(overflow),
-            .result(alu_result)
+            .result(alu_result),
+            .address(alu_address_out)
         );
 
     mux_1h #(.num_port(3)) alu_a_mux(
@@ -1340,7 +1342,7 @@ module cpu_sram #
                           .mem_wen_EX(mem_wen_EX),
 
                           .data(rt_data_EX),
-                          .virt_addr(result_EX),
+                          .virt_addr(alu_address_out),
 
                           .ID_EX_reg_valid(ID_EX_reg_valid),
                           .ID_EX_reg_allow_out(ID_EX_reg_allow_out),

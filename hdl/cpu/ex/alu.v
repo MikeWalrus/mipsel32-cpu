@@ -4,7 +4,8 @@ module alu(
         input [31:0] a,
         input [31:0] b,
         output overflow,
-        output [31:0] result
+        output [31:0] result,
+        output [31:0] address
     );
     wire cin;
     wire cout;
@@ -74,4 +75,5 @@ module alu(
                ),
                .out(result)
            );
+    assign address = adder_out;
 endmodule
