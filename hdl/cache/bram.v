@@ -1,18 +1,18 @@
-module bram #
-    (
-        parameter DEPTH = 65536,
-        parameter WIDTH = 32,
-        parameter WRITE_BYTE = 0,
+module bram
+    #(
+         parameter DEPTH = 65536,
+         parameter WIDTH = 32,
+         parameter WRITE_BYTE = 0,
 
-        parameter WE_WIDTH = WRITE_BYTE ? WIDTH/8 : 1
-    )
-    (
-        input [$clog2(DEPTH)-1:0] addr,
-        input clk,
-        input [WIDTH-1:0] din,
-        output [WIDTH-1:0] dout,
-        input [WE_WIDTH-1:0] we
-    );
+         parameter WE_WIDTH = WRITE_BYTE ? WIDTH/8 : 1
+     )
+     (
+         input [$clog2(DEPTH)-1:0] addr,
+         input clk,
+         input [WIDTH-1:0] din,
+         output [WIDTH-1:0] dout,
+         input [WE_WIDTH-1:0] we
+     );
 `ifndef IVERILOG
     xpm_memory_spram #(
                          .ADDR_WIDTH_A($clog2(DEPTH)),  // DECIMAL
