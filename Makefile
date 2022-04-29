@@ -28,10 +28,12 @@ cpu_%_verilate: $(cpu_source) $$(soc_$$*_source) $$(soc_$$*_sim_source)
 		
 .INTERMEDIATE:
 %_test: testbench/%_test.v
-	iverilog -Wall $^ -o $@
+	iverilog -DIVERILOG -Wall $^ -o $@
 
 div_test: $(cpu_dir)/ex/signed_to_abs.v $(cpu_dir)/ex/div.v
 tlb_test: $(cpu_dir)/mmu/tlb.v testbench/tlb_top.v $(cpu_dir)/util/mux_1h.v
+cache_dir := hdl/cache
+cache_test: $(cache_dir)/cache.v $(cache_dir)/bram.v testbench/cache_top.v
 
 .PHONY:
 run_%: %
