@@ -1,5 +1,9 @@
 #! /usr/bin/env python3
 
+"""
+On my machine, this takes around two DAYS to run.
+"""
+
 import subprocess
 import multiprocessing as mp
 
