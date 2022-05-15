@@ -80,7 +80,6 @@ module cache_top #
     wire [ 31:0] cacheres;
 
     wire         rd_req;
-    wire [  2:0] rd_type;
     wire [ 31:0] rd_addr;
     wire         rd_rdy;
     wire         ret_valid;
@@ -88,9 +87,7 @@ module cache_top #
     wire [ 31:0] ret_data;
 
     wire         wr_req;
-    wire [  2:0] wr_type;
     wire [ 31:0] wr_addr;
-    wire [  3:0] wr_wstrb;
     wire [127:0] wr_data;
     wire         wr_rdy;
 
@@ -248,7 +245,6 @@ module cache_top #
               .rdata  (cacheres ),
 
               .rd_req   (rd_req   ),
-              .rd_type  (rd_type  ),
               .rd_addr  (rd_addr  ),
               .rd_rdy   (rd_rdy   ),
               .ret_valid(ret_valid),
@@ -256,9 +252,7 @@ module cache_top #
               .ret_data (ret_data ),
 
               .wr_req  (wr_req  ),
-              .wr_type (wr_type ),
               .wr_addr (wr_addr ),
-              .wr_wstrb(wr_wstrb),
               .wr_data (wr_data ),
               .wr_rdy  (wr_rdy  )
           );

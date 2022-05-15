@@ -1,5 +1,9 @@
 cpu_dir := hdl/cpu
 cpu_source := $(wildcard $(cpu_dir)/*.v) $(wildcard $(cpu_dir)/*/*.v)
+
+cache_dir := hdl/cache
+cache_source := $(wildcard $(cache_dir)/*.v)
+
 headers := hdl/include
 
 verilog-axi_source := $(addprefix \
@@ -32,8 +36,8 @@ cpu_%_verilate: $(cpu_source) $$(soc_$$*_source) $$(soc_$$*_sim_source)
 
 div_test: $(cpu_dir)/ex/signed_to_abs.v $(cpu_dir)/ex/div.v
 tlb_test: $(cpu_dir)/mmu/tlb.v testbench/tlb_top.v $(cpu_dir)/util/mux_1h.v
-cache_dir := hdl/cache
-cache_test: $(cache_dir)/cache.v $(cache_dir)/bram.v testbench/cache_top.v
+cache_test: $(cache_source) $(cpu_dir)/util/mux_1h.v $(cpu_dir)/util/bin_to_1h.v testbench/cache_top.v
+lfsr_test: $(cache_dir)/lfsr.v
 
 .PHONY:
 run_%: %

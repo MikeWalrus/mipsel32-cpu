@@ -10,6 +10,7 @@ module testbench();
 
     initial
     begin
+        $dumpvars();
         clk = 1'b0;
         resetn = 1'b0;
         #2000;

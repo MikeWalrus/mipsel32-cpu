@@ -54,6 +54,13 @@ module bram
     end
     assign dout = dout_latch;
 
+    integer j;
+    initial begin
+        for (j = 0; j < DEPTH; j = j + 1) begin
+            ram_[j] = 0;
+        end
+    end
+
     localparam num_bytes = WIDTH / 8;
     generate
         genvar i;
