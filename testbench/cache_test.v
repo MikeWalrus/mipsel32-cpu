@@ -4,7 +4,13 @@
 `define CACHERES_WRONG  cache_top.cacheres_wrong
 `define TEST_INDEX  cache_top.test_index
 `define ROUND_FINISH cache_top.read_round_finish
-module testbench();
+module testbench #
+(
+        parameter NUM_WAY = 2,
+        parameter BYTES_PER_LINE = 64,
+        parameter NUM_LINE = 256 // must <= 256 if VIPT
+)
+();
     reg resetn;
     reg clk;
 
@@ -18,8 +24,13 @@ module testbench();
     end
     always #5 clk=~clk;
 
+    parameter INDEX_WIDTH = $clog2(NUM_LINE);
+
     cache_top #(
-                  .SIMULATION(1'b1)
+                  .SIMULATION(1'b1),
+                  .NUM_LINE(NUM_LINE),
+                  .NUM_WAY(NUM_WAY),
+                  .BYTES_PER_LINE(BYTES_PER_LINE)
               ) cache_top(
                   .resetn(resetn),
                   .clk(clk)
@@ -29,7 +40,7 @@ module testbench();
     begin
         if(`ROUND_FINISH) begin
             $display("index %x finished",`TEST_INDEX);
-            if(`TEST_INDEX==8'hff) begin
+            if(`TEST_INDEX=={INDEX_WIDTH{1'b1}}) begin
                 $display("=========================================================");
                 $display("Test end!");
                 $display("----PASS!!!");

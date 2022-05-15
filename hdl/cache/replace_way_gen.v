@@ -23,6 +23,7 @@ module replace_way_gen # (parameter NUM_WAY = 2)
     lfsr #(.WIDTH(LFSR_WIDTH)) lfsr(
              .clk(clk),
              .reset(reset),
+             .seed({LFSR_WIDTH{1'b1}}),
              .en(en & no_invalid_ways),
              .out(lfsr_out)
          );

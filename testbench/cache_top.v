@@ -1,6 +1,16 @@
 module cache_top #
     (
-        parameter SIMULATION=1'b0
+        parameter SIMULATION=1'b0,
+
+        parameter NUM_WAY = 2,
+        parameter BYTES_PER_LINE = 64,
+        parameter NUM_LINE = 256, // must <= 256 if VIPT
+
+        parameter OFFSET_WIDTH = $clog2(BYTES_PER_LINE),
+        parameter INDEX_WIDTH = $clog2(NUM_LINE),
+        parameter TAG_WIDTH = 32 - OFFSET_WIDTH - INDEX_WIDTH,
+        parameter WORDS_PER_LINE = BYTES_PER_LINE / 4,
+        parameter LINE_WIDTH = WORDS_PER_LINE * 32
     )
     (
         input         resetn,
@@ -26,28 +36,31 @@ module cache_top #
     localparam WRITE  =2'b01;
     localparam READ   =2'b10;
 
-    reg [ 19:0] tag  [3:0];
-    reg [127:0] data [3:0];
-    reg [ 22:0] pseudo_random_23;
-    reg [  1:0] counter_i;
-    reg [  1:0] counter_j;
+    localparam COUNTER_WIDTH = $clog2(WORDS_PER_LINE);
+
+    reg [TAG_WIDTH-1:0] tag  [WORDS_PER_LINE-1:0];
+    reg [LINE_WIDTH-1:0] data [WORDS_PER_LINE-1:0];
+    reg [COUNTER_WIDTH-1:0] counter_i;
+    reg [COUNTER_WIDTH-1:0] counter_j;
     reg [  1:0] round_state;
-    reg [  7:0] test_index;
-    reg [  1:0] res_counter_i;
-    reg [  1:0] res_counter_j;
+    reg [INDEX_WIDTH-1:0] test_index;
+    reg [COUNTER_WIDTH-1:0] res_counter_i;
+    reg [COUNTER_WIDTH-1:0] res_counter_j;
 
     wire [15:0] switch_led;
     wire [15:0] led_r_n;
     assign switch_led = {{2{switch[7]}},{2{switch[6]}},{2{switch[5]}},{2{switch[4]}},
                          {2{switch[3]}},{2{switch[2]}},{2{switch[1]}},{2{switch[0]}}};
     assign led_r_n = ~switch_led;
-    always @ (posedge clk_g)
-    begin
-        if (!resetn)
-            pseudo_random_23 <= (SIMULATION == 1'b1) ? {7'b1010101,16'h00FF} : {7'b1010101,led_r_n};
-        else
-            pseudo_random_23 <= {pseudo_random_23[21:0],pseudo_random_23[22] ^ pseudo_random_23[17]};
-    end
+
+    wire [31:0] pseudo_random_32;
+    lfsr #(.WIDTH(32)) lfsr (
+             .clk(clk_g),
+             .reset(~resetn),
+             .seed({16'b10101010101010, (SIMULATION == 1'b1) ? 16'h00FF : led_r_n}),
+             .en(1),
+             .out(pseudo_random_32)
+         );
 
     wire addr_ok;
 
@@ -69,9 +82,9 @@ module cache_top #
 
     reg          memref_valid;
     wire         memref_op;
-    wire [  7:0] in_index;
-    wire [ 19:0] in_tag;
-    wire [  3:0] in_offset;
+    wire [INDEX_WIDTH-1:0] in_index;
+    wire [TAG_WIDTH-1:0] in_tag;
+    wire [OFFSET_WIDTH-1:0] in_offset;
     wire [ 31:0] memref_data;
     wire [  3:0] memref_wstrb;
 
@@ -88,7 +101,7 @@ module cache_top #
 
     wire         wr_req;
     wire [ 31:0] wr_addr;
-    wire [127:0] wr_data;
+    wire [LINE_WIDTH-1:0] wr_data;
     wire         wr_rdy;
 
     wire         prepare_finish;
@@ -99,52 +112,56 @@ module cache_top #
 
     reg          new_state;
 
+    localparam COUNTER_MAX = {COUNTER_WIDTH{1'b1}};
+    localparam COUNTER_0 = {COUNTER_WIDTH{1'b0}};
+    localparam COUNTER_1 = {{COUNTER_WIDTH-1{1'b0}}, 1'b1};
+
     assign addr_ok = cache_addr_ok && memref_valid;
-    assign prepare_finish = round_state==PREPARE && counter_i==2'b11 && wait_1s;
-    assign write_round_finish = round_state==WRITE && res_counter_i==2'b11 && res_counter_j==2'b11 && write_finish;
-    assign  read_round_finish = round_state== READ && res_counter_i==2'b11 && read_finish;
+    assign prepare_finish = round_state==PREPARE && counter_i==COUNTER_MAX && wait_1s;
+    assign write_round_finish = round_state==WRITE && res_counter_i==COUNTER_MAX && res_counter_j==COUNTER_MAX && write_finish;
+    assign  read_round_finish = round_state== READ && res_counter_i==COUNTER_MAX && read_finish;
 
     always @(posedge clk_g) begin
         if(!resetn) begin
-            test_index   <= 8'b0;
+            test_index   <= {INDEX_WIDTH{1'b0}};
         end
         else if(read_round_finish && ~(&test_index)) begin
-            test_index <= test_index + 8'b1;
+            test_index <= test_index + {{INDEX_WIDTH-1{1'b0}}, 1'b1};
         end
     end
 
     always @(posedge clk_g) begin
         if(!resetn) begin
-            counter_i    <= 2'b0;
-            counter_j    <= 2'b0;
+            counter_i    <= COUNTER_0;
+            counter_j    <= COUNTER_0;
         end
         else if(round_state==PREPARE && wait_1s) begin
-            counter_i <= counter_i + 2'b01;
+            counter_i <= counter_i + COUNTER_1;
         end
         else if(round_state==WRITE && addr_ok) begin
-            counter_j <= counter_j + 2'b01;
-            if(counter_j==2'b11) begin
-                counter_i <= counter_i + 2'b01;
+            counter_j <= counter_j + COUNTER_1;
+            if(counter_j==COUNTER_MAX) begin
+                counter_i <= counter_i + COUNTER_1;
             end
         end
         else if(round_state==READ && addr_ok) begin
-            counter_i <= counter_i + 2'b01;
+            counter_i <= counter_i + COUNTER_1;
         end
     end
 
     always @(posedge clk_g) begin
         if(!resetn) begin
-            res_counter_i    <= 2'b0;
-            res_counter_j    <= 2'b0;
+            res_counter_i    <= COUNTER_0;
+            res_counter_j    <= COUNTER_0;
         end
         else if(round_state==WRITE && write_finish) begin
-            res_counter_j <= res_counter_j + 2'b01;
-            if(res_counter_j==2'b11) begin
-                res_counter_i <= res_counter_i + 2'b01;
+            res_counter_j <= res_counter_j + COUNTER_1;
+            if(res_counter_j==COUNTER_MAX) begin
+                res_counter_i <= res_counter_i + COUNTER_1;
             end
         end
         else if(round_state==READ && read_finish) begin
-            res_counter_i <= res_counter_i + 2'b01;
+            res_counter_i <= res_counter_i + COUNTER_1;
         end
     end
 
@@ -172,44 +189,47 @@ module cache_top #
         end
     end
 
+    integer i;
     /*      prepare         */
     always @(posedge clk_g) begin
         if(!resetn) begin
-            tag[0] <= 20'b0;
-            tag[1] <= 20'b0;
-            tag[2] <= 20'b0;
-            tag[3] <= 20'b0;
-            data[0] <= 128'b0;
-            data[1] <= 128'b0;
-            data[2] <= 128'b0;
-            data[3] <= 128'b0;
+            for (i = 0; i < WORDS_PER_LINE; i = i + 1) begin
+                tag[i] <= 0;
+                data[i] <= 0;
+            end
         end
         else if(round_state==PREPARE && wait_1s) begin
-            tag[counter_i] <= pseudo_random_23[19:0];
-            data[counter_i] <= {{5{pseudo_random_23}},pseudo_random_23[12:0]};
+            tag[counter_i] <= pseudo_random_32[TAG_WIDTH-1:0];
+            data[counter_i] <= {WORDS_PER_LINE{pseudo_random_32}};
         end
     end
 
     /*       write          */
     wire write_start;
-    assign write_start = round_state==WRITE && (new_state || (addr_ok && !(counter_i==2'b11 && counter_j==2'b11)));
+    assign write_start = round_state==WRITE && (new_state || (addr_ok && !(counter_i==COUNTER_MAX && counter_j==COUNTER_MAX)));
     assign write_finish = round_state==WRITE && out_valid;
     assign memref_op = round_state==WRITE;
 
     assign in_index  = test_index;
     assign in_tag    = tag[counter_i];
     assign in_offset = {counter_j,2'b00};
-    assign memref_data = {32{counter_j==2'b00}} & data[counter_i][ 31: 0]
-           | {32{counter_j==2'b01}} & data[counter_i][ 63:32]
-           | {32{counter_j==2'b10}} & data[counter_i][ 95:64]
-           | {32{counter_j==2'b11}} & data[counter_i][127:96];
-    assign memref_wstrb = counter_j==2'b11 ? 4'b0111 : 4'b1111;
+
+    mux #(.num_port(WORDS_PER_LINE)) memref_data_mux (
+        .select(counter_j),
+        .in(data[counter_i]),
+        .out(memref_data)
+    );
+    /* assign memref_data = {32{counter_j==2'b00}} & data[counter_i][ 31: 0] */
+    /*        | {32{counter_j==2'b01}} & data[counter_i][ 63:32] */
+    /*        | {32{counter_j==2'b10}} & data[counter_i][ 95:64] */
+    /*        | {32{counter_j==2'b11}} & data[counter_i][127:96]; */
+    assign memref_wstrb = counter_j==COUNTER_MAX ? 4'b0111 : 4'b1111;
 
     /*       read          */
     wire read_start;
     wire cacheres_right;
     wire cacheres_wrong;
-    assign read_start = round_state==READ && (new_state || (addr_ok && !(counter_i==2'b11)));
+    assign read_start = round_state==READ && (new_state || (addr_ok && !(counter_i==COUNTER_MAX)));
     assign read_finish = round_state==READ && cacheres_right;
     assign cacheres_right = out_valid && cacheres == data[res_counter_i][31:0];
     assign cacheres_wrong = out_valid && cacheres != data[res_counter_i][31:0] && round_state==READ;
@@ -229,54 +249,87 @@ module cache_top #
         end
     end
 
-    cache cache(
-              .clk    (clk_g),
-              .reset  (~resetn),
-              .valid  (memref_valid),
-              .write  (memref_op ),
-              .index  (in_index  ),
-              .tag    (in_tag    ),
-              .offset (in_offset ),
-              .wstrb  (memref_wstrb),
-              .wdata  (memref_data),
+    cache #
+        (
+            .NUM_WAY(NUM_WAY),
+            .BYTES_PER_LINE(BYTES_PER_LINE),
+            .NUM_LINE(NUM_LINE)
+        )
+        cache(
+            .clk    (clk_g),
+            .reset  (~resetn),
+            .valid  (memref_valid),
+            .write  (memref_op ),
+            .index  (in_index  ),
+            .tag    (in_tag    ),
+            .offset (in_offset ),
+            .wstrb  (memref_wstrb),
+            .wdata  (memref_data),
 
-              .addr_ok(cache_addr_ok),
-              .data_ok(out_valid),
-              .rdata  (cacheres ),
+            .addr_ok(cache_addr_ok),
+            .data_ok(out_valid),
+            .rdata  (cacheres ),
 
-              .rd_req   (rd_req   ),
-              .rd_addr  (rd_addr  ),
-              .rd_rdy   (rd_rdy   ),
-              .ret_valid(ret_valid),
-              .ret_last (ret_last ),
-              .ret_data (ret_data ),
+            .rd_req   (rd_req   ),
+            .rd_addr  (rd_addr  ),
+            .rd_rdy   (rd_rdy   ),
+            .ret_valid(ret_valid),
+            .ret_last (ret_last ),
+            .ret_data (ret_data ),
 
-              .wr_req  (wr_req  ),
-              .wr_addr (wr_addr ),
-              .wr_data (wr_data ),
-              .wr_rdy  (wr_rdy  )
-          );
+            .wr_req  (wr_req  ),
+            .wr_addr (wr_addr ),
+            .wr_data (wr_data ),
+            .wr_rdy  (wr_rdy  )
+        );
 
     /*         rd respond       */
     reg do_rd;
-    reg [1:0] rd_cnt;
-    reg [19:0] rd_tag_r;
-    reg [7:0] rd_index_r;
-    wire [127:0] rd_hit_data;
+    reg [COUNTER_WIDTH-1:0] rd_cnt;
+    reg [TAG_WIDTH-1:0] rd_tag_r;
+    reg [INDEX_WIDTH-1:0] rd_index_r;
+    // verilator lint_off UNUSED
+    wire [LINE_WIDTH-1:0] rd_hit_data;
+    // verilator lint_on UNUSED
     wire [31:0] rd_true_value;
-    assign rd_hit_data = {128{rd_tag_r == tag[0]}} & data[0]
-           | {128{rd_tag_r == tag[1]}} & data[1]
-           | {128{rd_tag_r == tag[2]}} & data[2]
-           | {128{rd_tag_r == tag[3]}} & data[3];
 
-    assign rd_true_value = {32{rd_cnt==2'b00 && rd_index_r==test_index}} & rd_hit_data[31 : 0]
-           | {32{rd_cnt==2'b01 && rd_index_r==test_index}} & rd_hit_data[63 :32]
-           | {32{rd_cnt==2'b10 && rd_index_r==test_index}} & rd_hit_data[95 :64]
-           | {32{rd_cnt==2'b11 && rd_index_r==test_index}} & {8'hff,rd_hit_data[119:96]};
+    wire [WORDS_PER_LINE-1:0] rd_tag_r_equal;
+    wire [WORDS_PER_LINE*LINE_WIDTH-1:0] data_in;
+    genvar k;
+    for (k = 0; k < WORDS_PER_LINE; k = k + 1) begin
+        assign rd_tag_r_equal[k] = rd_tag_r == tag[k];
+        assign data_in[k*LINE_WIDTH +: LINE_WIDTH] = data[k];
+    end
+
+    mux_1h #(.num_port(WORDS_PER_LINE), .data_width(LINE_WIDTH)) rd_hit_data_mux
+    (
+        .select(rd_tag_r_equal),
+        .in(data_in),
+        .out(rd_hit_data)
+    );
+    /* assign rd_hit_data = */
+    /*         {128{rd_tag_r == tag[0]}} & data[0] */
+    /*        | {128{rd_tag_r == tag[1]}} & data[1] */
+    /*        | {128{rd_tag_r == tag[2]}} & data[2] */
+    /*        | {128{rd_tag_r == tag[3]}} & data[3]; */
+
+    wire [31:0] rd_true_value_;
+    mux #(.num_port(WORDS_PER_LINE)) rd_true_value_mux
+    (
+        .select(rd_cnt),
+        .in({8'hff, rd_hit_data[LINE_WIDTH-1-8:0]}),
+        .out(rd_true_value_)
+    );
+    assign rd_true_value = {32{rd_index_r==test_index}} & rd_true_value_;
+
+    /* assign rd_true_value = {32{rd_cnt==2'b00 && rd_index_r==test_index}} & rd_hit_data[31 : 0] */
+    /*        | {32{rd_cnt==2'b01 && rd_index_r==test_index}} & rd_hit_data[63 :32] */
+    /*        | {32{rd_cnt==2'b10 && rd_index_r==test_index}} & rd_hit_data[95 :64] */
+    /*        | {32{rd_cnt==2'b11 && rd_index_r==test_index}} & {8'hff,rd_hit_data[119:96]}; */
 
     assign rd_rdy = ~do_rd;
     assign ret_valid = do_rd;
-    assign ret_last = rd_cnt == 2'b11;
+    assign ret_last = rd_cnt == COUNTER_MAX;
     assign ret_data = round_state==WRITE ? 32'hffffffff : rd_true_value;
 
     always @(posedge clk_g) begin
@@ -285,36 +338,48 @@ module cache_top #
         end
         if(rd_req && ~do_rd) begin
             do_rd <= 1'b1;
-            rd_tag_r <= rd_addr[31:12];
-            rd_index_r <= rd_addr[11:4];
+            rd_tag_r <= rd_addr[31 -: TAG_WIDTH];
+            rd_index_r <= rd_addr[OFFSET_WIDTH +: INDEX_WIDTH];
         end
-        else if(do_rd && rd_cnt==2'b11) begin
+        else if(do_rd && rd_cnt==COUNTER_MAX) begin
             do_rd <= 1'b0;
         end
     end
 
     always @(posedge clk_g) begin
         if(!resetn) begin
-            rd_cnt <= 2'b00;
+            rd_cnt <= COUNTER_0;
         end
         else if(do_rd) begin
-            rd_cnt <= rd_cnt + 2'b01;
+            rd_cnt <= rd_cnt + COUNTER_1;
         end
     end
     /*         wr respond       */
     reg do_wr;
-    reg [127:0] wr_data_r;
-    reg [ 19:0] wr_tag_r;
-    reg [  7:0] wr_index_r;
+    reg [LINE_WIDTH-1:0] wr_data_r;
+    reg [TAG_WIDTH-1:0] wr_tag_r;
+    reg [INDEX_WIDTH-1:0] wr_index_r;
     wire data_right;
     wire replace_wrong;
-    wire [127:0] wr_hit_data;
-    assign wr_hit_data = {128{wr_tag_r == tag[0] && wr_index_r==test_index}} & data[0]
-           | {128{wr_tag_r == tag[1] && wr_index_r==test_index}} & data[1]
-           | {128{wr_tag_r == tag[2] && wr_index_r==test_index}} & data[2]
-           | {128{wr_tag_r == tag[3] && wr_index_r==test_index}} & data[3];
-    assign data_right = {8'hff,wr_hit_data[119:0]} == wr_data_r;
-    assign replace_wrong = do_wr && {8'hff,wr_hit_data[119:0]} != wr_data_r;
+    wire [LINE_WIDTH-1:0] wr_hit_data;
+
+    wire [WORDS_PER_LINE-1:0] wr_tag_r_equal;
+    for (k = 0; k < WORDS_PER_LINE; k = k + 1) begin
+        assign wr_tag_r_equal[k] = wr_tag_r == tag[k];
+    end
+    mux_1h #(.num_port(WORDS_PER_LINE), .data_width(LINE_WIDTH)) wr_hit_data_mux
+    (
+        .select(wr_tag_r_equal & {WORDS_PER_LINE{wr_index_r==test_index}}),
+        .in(data_in),
+        .out(wr_hit_data)
+    );
+    /* assign wr_hit_data = */
+    /* {128{wr_tag_r == tag[0] && wr_index_r==test_index}} & data[0] */
+    /*        | {128{wr_tag_r == tag[1] && wr_index_r==test_index}} & data[1] */
+    /*        | {128{wr_tag_r == tag[2] && wr_index_r==test_index}} & data[2] */
+    /*        | {128{wr_tag_r == tag[3] && wr_index_r==test_index}} & data[3]; */
+    assign data_right = {8'hff,wr_hit_data[LINE_WIDTH-1-8:0]} == wr_data_r;
+    assign replace_wrong = do_wr && {8'hff,wr_hit_data[LINE_WIDTH-1-8:0]} != wr_data_r;
 
     assign wr_rdy = ~do_wr;
     always @(posedge clk_g) begin
@@ -324,8 +389,8 @@ module cache_top #
         if(wr_req && ~do_wr) begin
             do_wr <= 1'b1;
             wr_data_r <= wr_data;
-            wr_tag_r <= wr_addr[31:12];
-            wr_index_r <= wr_addr[11:4];
+            wr_tag_r <= wr_addr[31-:TAG_WIDTH];
+            wr_index_r <= wr_addr[OFFSET_WIDTH +: INDEX_WIDTH];
         end
         else if(do_wr && data_right) begin
             do_wr <= 1'b0;

@@ -6,13 +6,14 @@ module lfsr #
         input clk,
         input reset,
         input en,
+        input [WIDTH-1:0] seed,
         output [WIDTH-1:0] out
     );
     reg [WIDTH-1:0] lfsr_reg;
     wire [WIDTH-1:0] lfsr_reg_next;
     always @(posedge clk) begin
         if (reset)
-            lfsr_reg <= {WIDTH{1'b1}};
+            lfsr_reg <= seed;
         else if (en)
             lfsr_reg <= lfsr_reg_next;
     end
@@ -31,7 +32,9 @@ module lfsr #
                 32'h8000004, 32'h10000002, 32'h20000029, 32'h40000004,
                 32'h80000062};
     localparam [WIDTH-1:0] taps = all_taps[32*(32-WIDTH) +: WIDTH];
-    wire [WIDTH-1:0] taps_ = taps;
+    // verilator lint_off UNUSED
+    wire [WIDTH-1:0] _taps = taps;
+    // verilator lint_on UNUSED
     wire new_bit = ^(lfsr_reg & taps); // 0's don't affect the result of XOR
     assign lfsr_reg_next = {lfsr_reg[WIDTH-2:0], new_bit};
 endmodule
