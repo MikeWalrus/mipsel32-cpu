@@ -69,8 +69,9 @@ module pre_IF #
 
     assign inst_sram_wr = 1'b0;
     wire virt_mapped;
+    reg [31:0] curr_pc_pre_IF_req;
     addr_trans #(.TLB(TLB)) addr_trans_inst(
-                   .virt_addr(curr_pc_pre_IF),
+                   .virt_addr(curr_pc_pre_IF_req),
                    .phy_addr(inst_sram_addr),
                    .tlb_mapped(virt_mapped),
 
@@ -141,25 +142,27 @@ module pre_IF #
     always @(*) begin
         if (exception_now_pre_IF) begin
             if (tlb_refill_now_pre_IF)
-                curr_pc_pre_IF = 32'hBFC0_0200;
+                curr_pc_pre_IF_req = 32'hBFC0_0200;
             else
-                curr_pc_pre_IF = 32'hBFC0_0380;
+                curr_pc_pre_IF_req = 32'hBFC0_0380;
         end
         else if (eret_now_pre_IF)
-            curr_pc_pre_IF = cp0_epc;
+            curr_pc_pre_IF_req = cp0_epc;
         else if (refetch_now_pre_IF)
-            curr_pc_pre_IF = refetch_pc_pre_IF;
+            curr_pc_pre_IF_req = refetch_pc_pre_IF;
         else if (delay_slot_miss || delay_slot_have_missed)
             // We've missed the delay slot, so we request for the instruction
             // of the delay slot in this cycle, and request for the
             // instruction of the target in the next cycle.
-            curr_pc_pre_IF = curr_pc_IF + 4;
-        else if (inst_sram_addr_ok && _pre_IF_reg_allow_out) begin
-            if (use_target)
-                curr_pc_pre_IF = target;
-            else
-                curr_pc_pre_IF = next_pc_without_exception;
-        end else
+            curr_pc_pre_IF_req = curr_pc_IF + 4;
+        else if (use_target)
+            curr_pc_pre_IF_req = target;
+        else
+            curr_pc_pre_IF_req = next_pc_without_exception;
+
+        if ((inst_sram_addr_ok && _pre_IF_reg_allow_out) || eret_now_pre_IF || exception_now_pre_IF)
+            curr_pc_pre_IF = curr_pc_pre_IF_req;
+        else
             curr_pc_pre_IF = curr_pc_IF;
     end
     assign _pre_IF_reg_stall = inst_sram_req & ~inst_sram_addr_ok;
