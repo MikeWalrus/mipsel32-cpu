@@ -83,6 +83,7 @@ module pre_IF #
     // We misses the delay slot if:
     wire delay_slot_miss =
          ~next_pc_is_next & ~pre_IF_IF_reg_valid;
+    reg delay_slot_have_missed;
 
     reg [31:0] target;
     reg use_target;
@@ -103,7 +104,6 @@ module pre_IF #
         end
     end
 
-    reg delay_slot_have_missed;
     always @(posedge clk) begin
         if (reset) begin
             delay_slot_have_missed <= 0;
@@ -139,6 +139,10 @@ module pre_IF #
     end
     assign pre_IF_IF_reg_stall_discard_instruction = discard_instruction;
 
+    wire inst_addr_error = (curr_pc_pre_IF_req[1:0] != 2'b00);
+    wire inst_tlb_error = virt_mapped & ~(found & v);
+    assign tlb_refill = ~inst_addr_error & ~found;
+
     always @(*) begin
         // curr_pc_pre_IF_req: the address we request this cycle
         if (exception_now_pre_IF) begin
@@ -171,9 +175,6 @@ module pre_IF #
     end
     assign _pre_IF_reg_stall = inst_sram_req & ~inst_sram_addr_ok;
 
-    wire inst_addr_error = (curr_pc_pre_IF_req[1:0] != 2'b00);
-    wire inst_tlb_error = virt_mapped & ~(found & v);
-    assign tlb_refill = ~inst_addr_error & ~found;
     exception_multiple #(.NUM(2)) pre_IF_exceptions(
                            .exception_old(1'b0),
                            .exccode_old({5{1'bz}}),

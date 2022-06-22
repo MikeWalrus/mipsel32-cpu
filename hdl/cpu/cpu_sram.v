@@ -1,7 +1,7 @@
 `include "cp0.vh"
 module cpu_sram #
     (
-        parameter TLB = 0,
+        parameter TLB = 16,
         parameter TLBNUM = 16,
         parameter TLBNUM_WIDTH = $clog2(16)
     )
@@ -103,6 +103,7 @@ module cpu_sram #
     // from hi/lo or alu result
     wire [31:0] result_EX;
     wire [31:0] result_MEM;
+    wire [31:0] result_not_product_EX;
     wire is_result_alu_ID;
     wire is_result_lo_ID;
     wire is_result_hi_ID;
@@ -555,7 +556,7 @@ module cpu_sram #
         #(
             .WIDTH(32 + 1 + 5 + 1 + 19),
             .RESET(1),
-            .RESET_VALUE({32'hBFC0_0000 - 32'd4, 7'bxxxxxxx, 19'HXXX})
+            .RESET_VALUE({32'hBFC0_0000 - 32'h4, 7'bxxxxxxx, 19'HXXX})
         )
         pre_IF_IF_reg(
             .clk(clk),
@@ -1316,7 +1317,6 @@ module cpu_sram #
                  .complete(mult_div_complete)
              );
 
-    wire [31:0] result_not_product_EX;
     mux_1h #(.num_port(3)) result_mux (
                .select({is_result_alu_EX, is_result_lo_EX, is_result_hi_EX}),
                .in(    {alu_result      , lo             , hi             }),

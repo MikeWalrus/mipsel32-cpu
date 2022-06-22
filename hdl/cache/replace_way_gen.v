@@ -9,9 +9,12 @@ module replace_way_gen # (parameter NUM_WAY = 2)
     wire [NUM_WAY-1:0] invalid_way = ~v_ways;
     wire no_invalid_ways = ~|invalid_way;
 
-    // Isolate the rightmost bit
-    // http://fpgacpu.ca/fpga/Bitmask_Isolate_Rightmost_1_Bit.html
-    wire [NUM_WAY-1:0] replace_way_invalid = invalid_way & -invalid_way;
+    wire [NUM_WAY-1:0] replace_way_invalid;
+    isolate_rightmost #(.WIDTH(NUM_WAY))
+                      isolate_rightmost(
+                          .in(invalid_way),
+                          .out(replace_way_invalid)
+                      );
 
     // Use an LFSR with more bits than needed to get the distribution more even.
     localparam LFSR_WIDTH = $clog2(NUM_WAY) + 2;
