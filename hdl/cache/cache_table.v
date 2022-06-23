@@ -2,7 +2,7 @@ module cache_table #
     (
         parameter NUM_WAY = 2,
         parameter BYTES_PER_LINE = 16,
-        parameter NUM_LINE = 256, // must <= 256 if VIPT
+        parameter NUM_LINE = 256,
 
         parameter OFFSET_WIDTH = $clog2(BYTES_PER_LINE),
         parameter INDEX_WIDTH = $clog2(NUM_LINE),
@@ -15,7 +15,7 @@ module cache_table #
 
         input [TAG_WIDTH-1:0] tag, // next cycle
         input [INDEX_WIDTH-1:0] index,
-        input [BANK_NUM_WIDTH-1:0] bank_num,
+        input [BANK_NUM_WIDTH-1:0] bank_num, // next cycle
         output [NUM_WAY-1:0] hit_way, // next cycle
         output [NUM_WAY-1:0] v_ways, // next cycle
         output [31:0] rdata,          // next cycle

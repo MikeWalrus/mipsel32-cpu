@@ -2,7 +2,7 @@ module cache #
     (
         parameter NUM_WAY = 2,
         parameter BYTES_PER_LINE = 16,
-        parameter NUM_LINE = 256, // must <= 256 if VIPT
+        parameter NUM_LINE = 256,
 
         parameter OFFSET_WIDTH = $clog2(BYTES_PER_LINE),
         parameter INDEX_WIDTH = $clog2(NUM_LINE),
@@ -400,11 +400,12 @@ module cache #
                    }),
                .out(table_tag)
            );
-    assign table_bank_num = bank_num;
+    assign table_bank_num = req_buf_bank_num;
     assign read_way = replace_buf_replace_way;
 
     // I/O
     assign addr_ok = state_next == LOOKUP;
+    assign burst = 0; // TODO: remove this when implementing uncached requests
     wire refill_data_ok = (state == REFILL)
          && refill_requested_word && ret_valid && (~replace_buf_write);
     wire lookup_data_ok = (state == LOOKUP)
@@ -415,5 +416,4 @@ module cache #
     assign rd_req = (state == REPLACE) || (state == MISS);
     assign rd_addr = {replace_buf_tag_new, replace_buf_index, {OFFSET_WIDTH{1'b0}}};
     assign wr_req = first_cycle_of_REPLACE;
-
 endmodule
