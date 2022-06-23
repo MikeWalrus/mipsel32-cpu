@@ -6,11 +6,14 @@ module addr_trans #
         input [31:0] virt_addr,
         output [31:0] phy_addr,
         output tlb_mapped,
+        output cached,
 
         // TLB
         output [18:0] vpn2,
         output odd_page,
-        input [19:0] pfn
+        input [19:0] pfn,
+        input [2:0] c,
+        input [2:0] cp0_config_k0
     );
     // localparam virt_kuseg_start = 32'h0000_0000;
     localparam virt_kseg0_start = 32'h8000_0000;
@@ -44,7 +47,7 @@ module addr_trans #
     end
 
     mux_1h #(.num_port(3))
-           mux(
+           phy_addr_mux(
                .select({kseg0, kseg1, mapped}),
                .in(
                    {
@@ -53,5 +56,19 @@ module addr_trans #
                        mapped_addr
                    }),
                .out(phy_addr)
+           );
+
+    localparam [2:0] is_cached = 3'h3;
+
+    mux_1h #(.num_port(3), .data_width(1))
+           cached_mux(
+               .select({kseg0, kseg1, mapped}),
+               .in(
+                   {
+                       cp0_config_k0 == is_cached,
+                       1'b0,
+                       c == is_cached
+                   }),
+               .out(cached)
            );
 endmodule

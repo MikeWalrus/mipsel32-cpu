@@ -124,6 +124,8 @@ module control(
     wire func_subu  = func == 6'b100011;
     wire func_xor   = func == 6'b100110;
 
+    wire is_mul = opcode == 6'b011100 & func == 6'b000010;
+
     wire func_break   = func == 6'b001101;
     wire func_syscall = func == 6'b001100;
 
@@ -238,7 +240,6 @@ module control(
     assign is_multu = is_R_type & func_multu;
     assign is_div = is_R_type & func_div;
     assign is_divu = is_R_type & func_divu;
-    wire is_mul = is_special2 & func == 6'b000010;
 
     assign lo_wen = is_R_type & func_mtlo;
     assign hi_wen = is_R_type & func_mthi;

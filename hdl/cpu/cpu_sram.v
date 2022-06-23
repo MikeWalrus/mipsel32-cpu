@@ -1,9 +1,20 @@
 `include "cp0.vh"
 module cpu_sram #
     (
-        parameter TLB = 0,
-        parameter TLBNUM = 16,
-        parameter TLBNUM_WIDTH = $clog2(16)
+        // TLB
+        parameter TLB = 1,
+        parameter TLBNUM = 2,
+        parameter TLBNUM_WIDTH = $clog2(TLBNUM),
+
+        // Cache
+        parameter I_NUM_WAY = 2,
+        // BYTES_PER_LINE * NUM_LINE must <= 4096
+        parameter I_BYTES_PER_LINE = 32,
+        parameter I_NUM_LINE = 128,
+        parameter D_NUM_WAY = 2,
+        // BYTES_PER_LINE * NUM_LINE must <= 4096
+        parameter D_BYTES_PER_LINE = 16,
+        parameter D_NUM_LINE = 256
     )
     (
         input clk,
@@ -103,6 +114,7 @@ module cpu_sram #
     // from hi/lo or alu result
     wire [31:0] result_EX;
     wire [31:0] result_MEM;
+    wire [31:0] result_not_product_EX;
     wire is_result_alu_ID;
     wire is_result_lo_ID;
     wire is_result_hi_ID;
@@ -331,27 +343,31 @@ module cpu_sram #
     // cp0
     wire [4:0] cp0_reg_num_ID = rd;
     wire [4:0] cp0_reg_num_WB;
+    wire cp0_reg_sel_ID = func[0];
+    wire cp0_reg_sel_WB;
 
     wire mtc0_ID;
     wire mtc0_WB;
     wire mfc0_ID;
     wire mfc0_WB;
-    wire [7:0] cp0_signals_ID;
-    wire [7:0] cp0_signals_EX;
-    wire [7:0] cp0_signals_MEM;
-    wire [7:0] cp0_signals_WB;
+    wire [8:0] cp0_signals_ID;
+    wire [8:0] cp0_signals_EX;
+    wire [8:0] cp0_signals_MEM;
+    wire [8:0] cp0_signals_WB;
     assign cp0_signals_ID =
            {
                mtc0_ID,
                mfc0_ID,
                cp0_reg_num_ID,
-               is_delay_slot_ID
+               is_delay_slot_ID,
+               cp0_reg_sel_ID
            };
     assign {
             mtc0_WB,
             mfc0_WB,
             cp0_reg_num_WB,
-            is_delay_slot_WB
+            is_delay_slot_WB,
+            cp0_reg_sel_WB
         } = cp0_signals_WB;
     // NOTE: These indices is related to the order of assignment above.
     wire mtc0_EX = cp0_signals_EX[7];
@@ -383,10 +399,11 @@ module cpu_sram #
     wire cp0_status_ie;
     wire [18:0] cp0_entry_hi_vpn2;
     wire [7:0] cp0_entry_hi_asid;
+    wire [2:0] cp0_config_k0;
 
-    wire [TLBNUM_WIDTH:0] tlbp_result_EX;
-    wire [TLBNUM_WIDTH:0] tlbp_result_MEM;
-    wire [TLBNUM_WIDTH:0] tlbp_result_WB;
+    wire [TLBNUM_WIDTH-1:0] tlbp_result_EX;
+    wire [TLBNUM_WIDTH-1:0] tlbp_result_MEM;
+    wire [TLBNUM_WIDTH-1:0] tlbp_result_WB;
 
     // pipeline registers control signals
     wire _pre_IF_reg_valid_in = ~reset;
@@ -555,7 +572,7 @@ module cpu_sram #
         #(
             .WIDTH(32 + 1 + 5 + 1 + 19),
             .RESET(1),
-            .RESET_VALUE({32'hBFC0_0000 - 32'd4, 7'bxxxxxxx, 19'HXXX})
+            .RESET_VALUE({32'hBFC0_0000 - 32'h4, 7'bxxxxxxx, 19'HXXX})
         )
         pre_IF_IF_reg(
             .clk(clk),
@@ -623,7 +640,7 @@ module cpu_sram #
     pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 +
                           21 + 8 +
                           5 + 10 + 7 +
-                          8 + 1 + 5 +
+                          9 + 1 + 5 +
                           32 + 1 + 1 +
                           1 + 1 + 1 +
                           1 +
@@ -667,11 +684,11 @@ module cpu_sram #
     pipeline_reg #(.WIDTH(32 + 8 +
                           32 + 2 +
                           7 + 32 +
-                          8 +
+                          9 +
                           1 + 5 +
                           32 +
                           1 +
-                          5 +
+                          TLBNUM_WIDTH +
                           1 + 1 + 1 +
                           1 +
                           19))
@@ -717,7 +734,7 @@ module cpu_sram #
                  );
 
     pipeline_reg #(.WIDTH(
-                       32 + 38 + 32 + 8 + 1 + 5 + 32 + 5 + 1 + 1 + 1 + 1 + 19))
+                       32 + 38 + 32 + 9 + 1 + 5 + 32 + TLBNUM_WIDTH + 1 + 1 + 1 + 1 + 19))
                  MEM_WB_reg(
                      .clk(clk),
                      .reset(reset),
@@ -925,6 +942,7 @@ module cpu_sram #
                .pfn(s0_pfn),
                .found(s0_found),
                .v(s0_v),
+               .c(s0_c),
 
                .tlb_refill(tlb_refill_pre_IF)
            );
@@ -1316,7 +1334,6 @@ module cpu_sram #
                  .complete(mult_div_complete)
              );
 
-    wire [31:0] result_not_product_EX;
     mux_1h #(.num_port(3)) result_mux (
                .select({is_result_alu_EX, is_result_lo_EX, is_result_hi_EX}),
                .in(    {alu_result      , lo             , hi             }),
@@ -1486,11 +1503,19 @@ module cpu_sram #
     wire [31:0] cp0_reg;
     wire cp0_reg_wen =
          mtc0_WB & MEM_WB_reg_valid & ~exception_WB;
-    cp0 #(.TLBNUM(TLBNUM)) cp0(
+    cp0 #(
+            .TLBNUM(TLBNUM),
+            .I_NUM_WAY(I_NUM_WAY),
+            .I_BYTES_PER_LINE(I_BYTES_PER_LINE),
+            .I_NUM_LINE(I_NUM_LINE),
+            .D_NUM_WAY(D_NUM_WAY),
+            .D_BYTES_PER_LINE(D_BYTES_PER_LINE),
+            .D_NUM_LINE(D_NUM_LINE)
+        ) cp0(
             .clk(clk),
             .reset(reset),
             .reg_num(cp0_reg_num_WB),
-            .sel(2'b00), // TODO
+            .sel(cp0_reg_sel_WB),
             .reg_in(rt_data_WB),
 
             .wen(cp0_reg_wen),
@@ -1514,6 +1539,7 @@ module cpu_sram #
             .status_exl(cp0_status_exl),
             .entry_hi_vpn2(cp0_entry_hi_vpn2),
             .entry_hi_asid(cp0_entry_hi_asid),
+            .config_k0(cp0_config_k0),
 
             .exception_now(exception_now),
             .eret_now(eret_now),

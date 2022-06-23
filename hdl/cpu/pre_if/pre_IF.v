@@ -57,8 +57,12 @@ module pre_IF #
         output odd_page,
         input [19:0] pfn,
         input found,
-        input v
+        input v,
+        input [2:0] c,
+
+        input [2:0] cp0_config_k0
     );
+    wire cached;
     assign inst_sram_size = 2'd2;
     assign inst_sram_wstrb = 4'b1111;
     assign inst_sram_req =
@@ -74,15 +78,19 @@ module pre_IF #
                    .virt_addr(curr_pc_pre_IF_req),
                    .phy_addr(inst_sram_addr),
                    .tlb_mapped(virt_mapped),
+                   .cached(cached),
 
                    .vpn2(vpn2),
                    .odd_page(odd_page),
-                   .pfn(pfn)
+                   .pfn(pfn),
+                   .c(c),
+                   .cp0_config_k0(cp0_config_k0)
                );
 
     // We misses the delay slot if:
     wire delay_slot_miss =
          ~next_pc_is_next & ~pre_IF_IF_reg_valid;
+    reg delay_slot_have_missed;
 
     reg [31:0] target;
     reg use_target;
@@ -103,7 +111,6 @@ module pre_IF #
         end
     end
 
-    reg delay_slot_have_missed;
     always @(posedge clk) begin
         if (reset) begin
             delay_slot_have_missed <= 0;
@@ -139,6 +146,10 @@ module pre_IF #
     end
     assign pre_IF_IF_reg_stall_discard_instruction = discard_instruction;
 
+    wire inst_addr_error = (curr_pc_pre_IF_req[1:0] != 2'b00);
+    wire inst_tlb_error = virt_mapped & ~(found & v);
+    assign tlb_refill = ~inst_addr_error & ~found;
+
     always @(*) begin
         // curr_pc_pre_IF_req: the address we request this cycle
         if (exception_now_pre_IF) begin
@@ -160,7 +171,9 @@ module pre_IF #
             curr_pc_pre_IF_req = target;
         else
             curr_pc_pre_IF_req = next_pc_without_exception;
+    end
 
+    always @(*) begin
         // curr_pc_pre_IF: the address we probably should request the next cycle
         if ((inst_sram_addr_ok && _pre_IF_reg_allow_out)
                 || eret_now_pre_IF || exception_now_pre_IF
@@ -171,9 +184,6 @@ module pre_IF #
     end
     assign _pre_IF_reg_stall = inst_sram_req & ~inst_sram_addr_ok;
 
-    wire inst_addr_error = (curr_pc_pre_IF_req[1:0] != 2'b00);
-    wire inst_tlb_error = virt_mapped & ~(found & v);
-    assign tlb_refill = ~inst_addr_error & ~found;
     exception_multiple #(.NUM(2)) pre_IF_exceptions(
                            .exception_old(1'b0),
                            .exccode_old({5{1'bz}}),
