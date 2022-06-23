@@ -82,7 +82,7 @@ module cp0 #
     wire exception = exception_like & ~eret & ~refetch;
 
     localparam [0:0] config_m = 1'b1;
-    localparam [0:0] config_be = 0'b0;
+    localparam [0:0] config_be = 1'b0;
     localparam [1:0] config_at = 2'b0;
     localparam [2:0] config_ar = 3'b0;
     localparam [2:0] config_mt = 3'b1;
@@ -105,18 +105,19 @@ module cp0 #
              4'b0,
              config_k0
          };
-    function [2:0] clog2_minus_m(input [31:0] n, input [2:0] m);
-        reg [2:0] clog2_n = $clog2(n);
-        clog2_minus_m = clog2_n - m;
-    endfunction
+
+    localparam [2:0] tmp_is = $clog2(I_NUM_LINE);
+    localparam [2:0] tmp_il = $clog2(I_BYTES_PER_LINE);
+    localparam [2:0] tmp_ds = $clog2(D_NUM_LINE);
+    localparam [2:0] tmp_dl = $clog2(D_BYTES_PER_LINE);
 
     localparam [0:0] config1_m = 1'b1;
     localparam [5:0] config1_mmu_size_1 = TLBNUM[5:0];
-    localparam [2:0] config1_is = clog2_minus_m(I_NUM_LINE, 3'h6);
-    localparam [2:0] config1_il = clog2_minus_m(I_BYTES_PER_LINE, 3'h1);
+    localparam [2:0] config1_is = tmp_is - 3'h6;
+    localparam [2:0] config1_il = tmp_il - 3'h1;
     localparam [2:0] config1_ia = I_NUM_WAY - 1;
-    localparam [2:0] config1_ds = clog2_minus_m(D_NUM_LINE, 3'h6);
-    localparam [2:0] config1_dl = clog2_minus_m(D_BYTES_PER_LINE, 3'h1);
+    localparam [2:0] config1_ds = tmp_ds - 3'h6;
+    localparam [2:0] config1_dl = tmp_dl - 3'h1;
     localparam [2:0] config1_da = D_NUM_WAY - 1;
     localparam [0:0] config1_c2 = 0;
     localparam [0:0] config1_md = 0;
