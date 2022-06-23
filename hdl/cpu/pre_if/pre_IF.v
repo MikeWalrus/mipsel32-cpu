@@ -57,8 +57,12 @@ module pre_IF #
         output odd_page,
         input [19:0] pfn,
         input found,
-        input v
+        input v,
+        input [2:0] c,
+
+        input [2:0] cp0_config_k0
     );
+    wire cached;
     assign inst_sram_size = 2'd2;
     assign inst_sram_wstrb = 4'b1111;
     assign inst_sram_req =
@@ -74,10 +78,13 @@ module pre_IF #
                    .virt_addr(curr_pc_pre_IF_req),
                    .phy_addr(inst_sram_addr),
                    .tlb_mapped(virt_mapped),
+                   .cached(cached),
 
                    .vpn2(vpn2),
                    .odd_page(odd_page),
-                   .pfn(pfn)
+                   .pfn(pfn),
+                   .c(c),
+                   .cp0_config_k0(cp0_config_k0)
                );
 
     // We misses the delay slot if:

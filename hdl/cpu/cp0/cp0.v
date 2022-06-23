@@ -2,14 +2,25 @@
 
 module cp0 #
     (
+        // TLB
         parameter TLBNUM = 16,
-        parameter TLBNUM_WIDTH = $clog2(TLBNUM)
+        parameter TLBNUM_WIDTH = $clog2(TLBNUM),
+
+        // Cache
+        parameter I_NUM_WAY = 2,
+        // BYTES_PER_LINE * NUM_LINE must <= 4096
+        parameter I_BYTES_PER_LINE = 32,
+        parameter I_NUM_LINE = 128,
+        parameter D_NUM_WAY = 2,
+        // BYTES_PER_LINE * NUM_LINE must <= 4096
+        parameter D_BYTES_PER_LINE = 16,
+        parameter D_NUM_LINE = 256
     )
     (
         input clk,
         input reset,
         input [4:0] reg_num,
-        input [1:0] sel,
+        input sel,
         input [31:0] reg_in,
 
         input wen,
@@ -33,6 +44,7 @@ module cp0 #
         output reg status_exl,
         output reg [18:0] entry_hi_vpn2,
         output reg [7:0] entry_hi_asid,
+        output reg [2:0] config_k0,
 
         output reg exception_now,
         output eret_now,
@@ -68,7 +80,70 @@ module cp0 #
     wire eret = exception_like & exccode == `ERET;
     wire refetch = exception_like & exccode == `REFETCH;
     wire exception = exception_like & ~eret & ~refetch;
-    wire status_bev = 1'b1;
+
+    localparam [0:0] config_m = 1'b1;
+    localparam [0:0] config_be = 0'b0;
+    localparam [1:0] config_at = 2'b0;
+    localparam [2:0] config_ar = 3'b0;
+    localparam [2:0] config_mt = 3'b1;
+    // reg [2:0] config_k0;
+    always @(posedge clk) begin
+        if (reset)
+            config_k0 <= 3'h2;
+        else if (reg_num == `CONFIG && sel == 0) begin
+            if (wen)
+                config_k0 <= reg_in[2:0];
+        end
+    end
+    wire [31:0] config_ = {
+             config_m,
+             15'b0,
+             config_be,
+             config_at,
+             config_ar,
+             config_mt,
+             4'b0,
+             config_k0
+         };
+    function [2:0] clog2_minus_m(input [31:0] n, input [2:0] m);
+        reg [2:0] clog2_n = $clog2(n);
+        clog2_minus_m = clog2_n - m;
+    endfunction
+
+    localparam [0:0] config1_m = 1'b1;
+    localparam [5:0] config1_mmu_size_1 = TLBNUM[5:0];
+    localparam [2:0] config1_is = clog2_minus_m(I_NUM_LINE, 3'h6);
+    localparam [2:0] config1_il = clog2_minus_m(I_BYTES_PER_LINE, 3'h1);
+    localparam [2:0] config1_ia = I_NUM_WAY - 1;
+    localparam [2:0] config1_ds = clog2_minus_m(D_NUM_LINE, 3'h6);
+    localparam [2:0] config1_dl = clog2_minus_m(D_BYTES_PER_LINE, 3'h1);
+    localparam [2:0] config1_da = D_NUM_WAY - 1;
+    localparam [0:0] config1_c2 = 0;
+    localparam [0:0] config1_md = 0;
+    localparam [0:0] config1_pc = 0;
+    localparam [0:0] config1_wr = 0;
+    localparam [0:0] config1_ca = 0;
+    localparam [0:0] config1_ep = 0;
+    localparam [0:0] config1_fp = 0;
+    wire [31:0] config1 = {
+             config1_m,
+             config1_mmu_size_1,
+             config1_is,
+             config1_il,
+             config1_ia,
+             config1_ds,
+             config1_dl,
+             config1_da,
+             config1_c2,
+             config1_md,
+             config1_pc,
+             config1_wr,
+             config1_ca,
+             config1_ep,
+             config1_fp
+         };
+
+    wire status_bev = 1'b1; // TODO: implement this
     // reg [7:0] status_im;
     // reg status_exl;
     // reg status_ie;
@@ -311,6 +386,8 @@ module cp0 #
                 reg_out = badvaddr;
             `COUNT:
                 reg_out = count;
+            `CONFIG:
+                reg_out = (sel == 2'b0) ? config_ : config1;
             default:
                 reg_out = 0;
         endcase
