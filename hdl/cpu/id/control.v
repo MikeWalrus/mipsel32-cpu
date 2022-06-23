@@ -26,7 +26,7 @@ module control(
         output lo_wen,
         output hi_wen,
 
-        output [11:0] alu_op,
+        output [13:0] alu_op,
         output alu_a_is_pc,
         output alu_a_is_rs_data,
         output alu_a_is_shamt,
@@ -127,6 +127,30 @@ module control(
     wire func_break   = func == 6'b001101;
     wire func_syscall = func == 6'b001100;
 
+    wire is_special2   = opcode == 6'b011100;
+
+    wire alu_op_add = (is_R_type & (func_add | func_addu | func_jalr))
+         | is_addiu | is_addi | is_load | is_store | link;//0
+    wire alu_op_sub = (is_R_type & (func_subu | func_sub));//1
+    wire alu_op_slt = (is_R_type & func_slt) | is_slti;//2
+    wire alu_op_sltu = (is_R_type & func_sltu) | is_sltiu;//3
+    wire alu_op_and = (is_R_type & func_and) | is_andi;//4
+    wire alu_op_nor = (is_R_type & func_nor);//5
+    wire alu_op_or = (is_R_type & func_or) | is_ori;//6
+    wire alu_op_xor = (is_R_type & func_xor) | is_xori;//7
+    wire alu_op_sll = (is_R_type & (func_sll | func_sllv));//8
+    wire alu_op_srl = (is_R_type & (func_srl | func_srlv));//9
+    wire alu_op_sra = (is_R_type & (func_sra | func_srav));//10
+    wire alu_op_lui = (is_lui);//11
+    wire alu_op_clo = is_special2 & func == 6'b100001;//12
+    wire alu_op_clz = is_special2 & func == 6'b100000;//13
+    assign alu_op = {
+               alu_op_clz, alu_op_clo, alu_op_lui,
+               alu_op_sra, alu_op_srl, alu_op_sll,
+               alu_op_xor, alu_op_or, alu_op_nor, alu_op_and,
+               alu_op_sltu, alu_op_slt, alu_op_sub, alu_op_add
+           };// must be the same order as in alu.vh
+
     // CP0
     wire cp0 = opcode == 6'b010000;
     assign mtc0 = cp0 & rs == 5'b00100;
@@ -150,7 +174,7 @@ module control(
 
     assign imm_is_sign_extend = ~(is_andi | is_ori | is_xori);
 
-    assign reg_write = |{is_R_type, is_load, link, imm_arith, mfc0, is_mul};
+    assign reg_write = |{is_R_type, is_load, link, imm_arith, mfc0, is_mul, alu_op_clo, alu_op_clz};
     assign reg_write_addr_is_rd = is_R_type | is_mul;
     assign reg_write_addr_is_31 = link_31;
     assign reg_write_addr_is_rt = ~reg_write_addr_is_31 & ~reg_write_addr_is_rd;
@@ -204,48 +228,6 @@ module control(
            (is_R_type & |{func_add, func_sub, func_sub})
            | is_addi;
 
-    assign alu_op =
-           {12{
-                (is_R_type & (func_add | func_addu | func_jalr))
-                | is_addiu | is_addi | is_load | is_store | link
-            }} & `ALU_OP(`ALU_ADD) |
-           {12{
-                (is_R_type & (func_subu | func_sub))
-            }} & `ALU_OP(`ALU_SUB) |
-           {12{
-                (is_R_type & func_slt) | is_slti
-            }} & `ALU_OP(`ALU_SLT) |
-           {12{
-                (is_R_type & func_sltu) | is_sltiu
-            }} & `ALU_OP(`ALU_SLTU)|
-           {12{
-                (is_R_type & (func_sll | func_sllv))
-            }} & `ALU_OP(`ALU_SLL) |
-           {12{
-                (is_R_type & (func_srl | func_srlv))
-            }} & `ALU_OP(`ALU_SRL) |
-           {12{
-                (is_R_type & (func_sra | func_srav ))
-            }} & `ALU_OP(`ALU_SRA) |
-           {12{
-                (is_lui)
-            }} & `ALU_OP(`ALU_LUI) |
-           {12{
-                (is_R_type & func_or)
-                | is_ori
-            }} & `ALU_OP(`ALU_OR)  |
-           {12{
-                (is_R_type & func_xor)
-                | is_xori
-            }} & `ALU_OP(`ALU_XOR) |
-           {12{
-                (is_R_type & func_and)
-                | is_andi
-            }} & `ALU_OP(`ALU_AND) |
-           {12{
-                (is_R_type & func_nor)
-            }} & `ALU_OP(`ALU_NOR)
-           ;
 
     assign is_result_hi = is_R_type & func_mfhi;
     assign is_result_lo = is_R_type & func_mflo;
@@ -256,7 +238,7 @@ module control(
     assign is_multu = is_R_type & func_multu;
     assign is_div = is_R_type & func_div;
     assign is_divu = is_R_type & func_divu;
-    wire is_mul = opcode == 6'b011100 & func == 6'b000010;
+    wire is_mul = is_special2 & func == 6'b000010;
 
     assign lo_wen = is_R_type & func_mtlo;
     assign hi_wen = is_R_type & func_mthi;
@@ -300,7 +282,7 @@ module control(
                is_swr,
                is_xori,
                cp0,
-               is_mul
+               is_special2
            };
 
     assign exc_break = is_R_type & func_break;

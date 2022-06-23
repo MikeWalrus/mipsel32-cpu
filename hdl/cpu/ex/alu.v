@@ -1,6 +1,6 @@
 `include "alu.vh"
 module alu(
-        input [11:0] op, // one-hot
+        input [13:0] op, // one-hot
         input [31:0] a,
         input [31:0] b,
         output overflow,
@@ -34,6 +34,8 @@ module alu(
     wire is_or   = op[`ALU_OR];
     wire is_xor  = op[`ALU_XOR];
     wire is_nor  = op[`ALU_NOR];
+    wire is_clo  = op[`ALU_CLO];
+    wire is_clz  = op[`ALU_CLZ];
 
     wire bnegate = is_sub | is_slt | is_sltu;
     assign binvert = bnegate;
@@ -43,7 +45,21 @@ module alu(
 
     wire [31:0] sra_result = $signed(b) >>> shamt;
 
-    mux_1h #(.num_port(11), .data_width(32)) result_mux(
+    genvar i;
+    wire [31:0] cl_rev;
+    for (i = 31; i >= 0; i = i - 1) begin
+        assign cl_rev[i] = a[31 - i];
+    end
+    wire [31:0] cl_lowbit = is_clz ? (cl_rev & (-cl_rev)) : (~cl_rev & (cl_rev + 1));
+    wire [5:0] cl_16, cl_8, cl_4, cl_2, cl_1, cl_0;
+    assign cl_16 = ((cl_lowbit[15:0] == 16'b0) ? 16 : 0);
+    assign cl_8  = ((cl_lowbit[cl_16+:8] ==  8'b0) ? 8 : 0) + cl_16;
+    assign cl_4  = ((cl_lowbit[cl_8+:4] ==  4'b0) ? 4 : 0) + cl_8;
+    assign cl_2  = ((cl_lowbit[cl_4+:2] ==  2'b0) ? 2 : 0) + cl_4;
+    assign cl_1  = ((cl_lowbit[cl_2+:1] ==  1'b0) ? 1 : 0) + cl_2;
+    assign cl_0  = ((cl_lowbit[cl_1]    ==  1'b0) ? 1 : 0) + cl_1;
+    wire [31:0] cl_ans = {27'b0, cl_0};
+    mux_1h #(.num_port(12), .data_width(32)) result_mux(
                .select(
                    {
                        is_add | is_sub,
@@ -56,7 +72,8 @@ module alu(
                        is_lui,
                        is_or,
                        is_xor,
-                       is_nor
+                       is_nor,
+                       is_clo | is_clz
                    }),
                .in(
                    {
@@ -70,7 +87,8 @@ module alu(
                        {b[15:0],{16{1'b0}}},
                        (a | b),
                        (a ^ b),
-                       ~(a | b)
+                       ~(a | b),
+                       cl_ans
                    }
                ),
                .out(result)

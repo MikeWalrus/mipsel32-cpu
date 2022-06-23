@@ -113,8 +113,8 @@ module cpu_sram #
     wire is_result_product_EX;
 
     // alu
-    wire [11:0] alu_op_ID;
-    wire [11:0] alu_op_EX;
+    wire [13:0] alu_op_ID;
+    wire [13:0] alu_op_EX;
 
     wire overflow_en_ID;
     wire overflow_en_EX;
@@ -141,8 +141,8 @@ module cpu_sram #
 
     // alu control signals
     // that go through pipeline registers
-    wire [18:0] alu_ctrl_ID;
-    wire [18:0] alu_ctrl_EX;
+    wire [20:0] alu_ctrl_ID;
+    wire [20:0] alu_ctrl_EX;
     assign alu_ctrl_ID = {
                alu_a_is_pc_ID,
                alu_a_is_rs_data_ID,
@@ -621,7 +621,7 @@ module cpu_sram #
                  );
 
     pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 +
-                          19 + 8 +
+                          21 + 8 +
                           5 + 10 + 7 +
                           8 + 1 + 5 +
                           32 + 1 + 1 +
