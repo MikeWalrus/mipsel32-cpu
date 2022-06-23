@@ -164,7 +164,9 @@ module pre_IF #
             curr_pc_pre_IF_req = target;
         else
             curr_pc_pre_IF_req = next_pc_without_exception;
+    end
 
+    always @(*) begin
         // curr_pc_pre_IF: the address we probably should request the next cycle
         if ((inst_sram_addr_ok && _pre_IF_reg_allow_out)
                 || eret_now_pre_IF || exception_now_pre_IF
