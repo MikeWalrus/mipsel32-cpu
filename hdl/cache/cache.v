@@ -15,6 +15,7 @@ module cache #
         input reset,
         input valid,
         input write,
+        input uncached,
         input [INDEX_WIDTH-1:0] index,
         input [TAG_WIDTH-1:0] tag,
         input [OFFSET_WIDTH-1:0] offset,
@@ -22,6 +23,7 @@ module cache #
         input [31:0] wdata,
 
         output addr_ok,
+        output burst,
         output data_ok,
         output [31:0] rdata,
 
@@ -37,7 +39,6 @@ module cache #
         output [BYTES_PER_LINE*8-1:0] wr_data,
         input wr_rdy
     );
-
     function [BANK_NUM_WIDTH-1:0] get_bank_num(
             // verilator lint_off UNUSED
             input [OFFSET_WIDTH-1:0] byte_offset
@@ -46,14 +47,26 @@ module cache #
         get_bank_num = byte_offset[2+:BANK_NUM_WIDTH];
     endfunction
 
+    localparam STATE_NUM = 6;
+    localparam STATE_BITS = $clog2(STATE_NUM);
+    reg [STATE_BITS-1:0] state;
+    wire [STATE_BITS-1:0] state_next;
+
+    localparam [STATE_BITS-1:0] IDLE = 'd0;
+    localparam [STATE_BITS-1:0] LOOKUP = 'd1;
+    localparam [STATE_BITS-1:0] MISS = 'd2;
+    localparam [STATE_BITS-1:0] DIRTY_MISS = 'd3;
+    localparam [STATE_BITS-1:0] REPLACE = 'd4;
+    localparam [STATE_BITS-1:0] REFILL = 'd5;
+
     wire [BANK_NUM_WIDTH-1:0] bank_num = get_bank_num(offset);
 
     // request buffer
     reg [INDEX_WIDTH-1:0] req_buf_index;
+    reg [OFFSET_WIDTH-1:0] req_buf_offset;
     wire [BANK_NUM_WIDTH-1:0] req_buf_bank_num = get_bank_num(req_buf_offset);
     reg req_buf_write;
     reg [TAG_WIDTH-1:0] req_buf_tag;
-    reg [OFFSET_WIDTH-1:0] req_buf_offset;
     reg [3:0] req_buf_wstrb;
     reg [31:0] req_buf_wdata;
     always @(posedge clk) begin
@@ -168,18 +181,6 @@ module cache #
          & write_buf_wstrb;
 
     // main FSM
-    localparam STATE_NUM = 6;
-    localparam STATE_BITS = $clog2(STATE_NUM);
-
-    localparam [STATE_BITS-1:0] IDLE = 'd0;
-    localparam [STATE_BITS-1:0] LOOKUP = 'd1;
-    localparam [STATE_BITS-1:0] MISS = 'd2;
-    localparam [STATE_BITS-1:0] DIRTY_MISS = 'd3;
-    localparam [STATE_BITS-1:0] REPLACE = 'd4;
-    localparam [STATE_BITS-1:0] REFILL = 'd5;
-
-    reg [STATE_BITS-1:0] state;
-    wire [STATE_BITS-1:0] state_next;
     always @(posedge clk) begin
         if (reset)
             state <= IDLE;
@@ -405,7 +406,7 @@ module cache #
     // I/O
     assign addr_ok = state_next == LOOKUP;
     wire refill_data_ok = (state == REFILL)
-         && refill_requested_word && (~replace_buf_write);
+         && refill_requested_word && ret_valid && (~replace_buf_write);
     wire lookup_data_ok = (state == LOOKUP)
          && (hit | req_buf_write /* writes don't stall */);
     assign data_ok = refill_data_ok | lookup_data_ok;
