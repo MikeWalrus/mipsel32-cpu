@@ -148,7 +148,7 @@ module pre_IF #
 
     wire inst_addr_error = (curr_pc_pre_IF_req[1:0] != 2'b00);
     wire inst_tlb_error = virt_mapped & ~(found & v);
-    assign tlb_refill = ~inst_addr_error & ~found;
+    assign tlb_refill = virt_mapped & ~inst_addr_error & ~found;
 
     always @(*) begin
         // curr_pc_pre_IF_req: the address we request this cycle

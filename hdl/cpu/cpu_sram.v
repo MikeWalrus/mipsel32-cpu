@@ -370,10 +370,10 @@ module cpu_sram #
             cp0_reg_sel_WB
         } = cp0_signals_WB;
     // NOTE: These indices is related to the order of assignment above.
-    wire mtc0_EX = cp0_signals_EX[7];
-    wire mfc0_EX = cp0_signals_EX[6];
-    wire mtc0_MEM = cp0_signals_MEM[7];
-    wire mfc0_MEM = cp0_signals_MEM[6];
+    wire mtc0_EX = cp0_signals_EX[8];
+    wire mfc0_EX = cp0_signals_EX[7];
+    wire mtc0_MEM = cp0_signals_MEM[8];
+    wire mfc0_MEM = cp0_signals_MEM[7];
     wire exception_now;
     wire eret_now;
     wire refetch_now;

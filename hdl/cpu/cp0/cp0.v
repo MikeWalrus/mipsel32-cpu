@@ -388,7 +388,7 @@ module cp0 #
             `COUNT:
                 reg_out = count;
             `CONFIG:
-                reg_out = (sel == 2'b0) ? config_ : config1;
+                reg_out = (sel == 1'b0) ? config_ : config1;
             default:
                 reg_out = 0;
         endcase

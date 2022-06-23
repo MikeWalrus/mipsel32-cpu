@@ -283,7 +283,9 @@ module control(
                is_swr,
                is_xori,
                cp0,
-               is_special2
+               is_mul,
+               alu_op_clo,
+               alu_op_clz
            };
 
     assign exc_break = is_R_type & func_break;
