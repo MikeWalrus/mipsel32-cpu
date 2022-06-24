@@ -63,7 +63,6 @@ module pre_IF #
 
         input [2:0] cp0_config_k0
     );
-    wire cached;
     assign inst_sram_size = 2'd2;
     assign inst_sram_wstrb = 4'b1111;
     assign inst_sram_req =
@@ -79,7 +78,7 @@ module pre_IF #
                    .virt_addr(curr_pc_pre_IF_req),
                    .phy_addr(inst_sram_addr),
                    .tlb_mapped(virt_mapped),
-                   .cached(cached),
+                   .cached(inst_sram_cached),
 
                    .vpn2(vpn2),
                    .odd_page(odd_page),

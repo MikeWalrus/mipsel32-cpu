@@ -12,6 +12,7 @@ module replace_way_gen # (parameter NUM_WAY = 2)
     wire [NUM_WAY-1:0] replace_way_invalid;
     isolate_rightmost #(.WIDTH(NUM_WAY))
                       isolate_rightmost(
+                          .en(1'b1),
                           .in(invalid_way),
                           .out(replace_way_invalid)
                       );

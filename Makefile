@@ -22,12 +22,12 @@ soc_sram_sim_source := $(wildcard sim/sram-like/*.v)
 all: cpu_axi_sim
 
 .SECONDEXPANSION:
-cpu_%_sim: $(cpu_source) $$(soc_$$*_source) $$(soc_$$*_sim_source)
+cpu_%_sim: $(cpu_source) $$(soc_$$*_source) $$(soc_$$*_sim_source) $(cache_source)
 	iverilog -Wall -o $@ -I$(headers) $(ARGS) -DIVERILOG \
 		-DSIMULATION $^
 
-cpu_%_verilate: $(cpu_source) $$(soc_$$*_source) $$(soc_$$*_sim_source)
-	verilator --trace --CFLAGS -g -Wno-TIMESCALEMOD -Wno-STMTDLY -Wno-PINMISSING -Wno-UNOPTFLAT -Wno-INITIALDLY -Wno-CASEINCOMPLETE -Wno-LITENDIAN -Wno-WIDTH -Wno-IMPLICIT -DIVERILOG --top-module tb_top -I$(headers) $(ARGS) --cc --exe --build sim_main.cpp $^
+cpu_%_verilate: $(cpu_source) $$(soc_$$*_source) $$(soc_$$*_sim_source) $(cache_source)
+	verilator --trace --CFLAGS -g -Wno-TIMESCALEMOD -Wno-STMTDLY -Wno-PINMISSING -Wno-INITIALDLY -Wno-CASEINCOMPLETE -Wno-LITENDIAN -Wno-WIDTH -Wno-IMPLICIT -DIVERILOG --top-module tb_top -I$(headers) $(ARGS) --cc --exe --build sim_main.cpp $^
 
 		
 .INTERMEDIATE:
@@ -36,7 +36,9 @@ cpu_%_verilate: $(cpu_source) $$(soc_$$*_source) $$(soc_$$*_sim_source)
 
 div_test: $(cpu_dir)/ex/signed_to_abs.v $(cpu_dir)/ex/div.v
 tlb_test: $(cpu_dir)/mmu/tlb.v testbench/tlb_top.v $(cpu_dir)/util/mux_1h.v
-cache_test: $(cache_source) $(cpu_dir)/util/mux.v $(cpu_dir)/util/mux_1h.v $(cpu_dir)/util/bin_to_1h.v testbench/cache_top.v
+cache_test: $(cache_source) $(cpu_dir)/util/mux.v $(cpu_dir)/util/mux_1h.v \
+	$(cpu_dir)/util/bin_to_1h.v $(cpu_dir)/util/isolate_rightmost.v \
+	testbench/cache_top.v
 lfsr_test: $(cache_dir)/lfsr.v
 
 .PHONY:
@@ -51,7 +53,6 @@ ifndef TARGET_CPU_DIR
 	$(error TARGET_CPU_DIR is not set)
 endif
 	-rm $(TARGET_CPU_DIR)/* -r
-	cp --parents -r $(cpu_source) $(headers) \
-		./hdl/soc/axi/cpu_axi_interface.v \
+	cp --parents -r $(cpu_source) $(headers) $(cache_source) \
 		./hdl/soc/axi/mycpu_top.v \
 		$(TARGET_CPU_DIR)

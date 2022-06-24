@@ -16,6 +16,7 @@ module cache #
         input valid,
         input write,
         input uncached,
+        input [1:0] size,
         input [INDEX_WIDTH-1:0] index,
         input [TAG_WIDTH-1:0] tag,
         input [OFFSET_WIDTH-1:0] offset,
@@ -29,6 +30,7 @@ module cache #
 
         output rd_req,
         output [31:0] rd_addr,
+        output [1:0] rd_size,
         input rd_rdy,
         input ret_valid,
         input ret_last,
@@ -36,6 +38,8 @@ module cache #
 
         output wr_req,
         output [31:0] wr_addr,
+        output [3:0] wr_strb,
+        output [1:0] wr_size,
         output [BYTES_PER_LINE*8-1:0] wr_data,
         input wr_rdy
     );
@@ -68,14 +72,18 @@ module cache #
     reg req_buf_write;
     reg [TAG_WIDTH-1:0] req_buf_tag;
     reg [3:0] req_buf_wstrb;
+    reg [1:0] req_buf_size;
     reg [31:0] req_buf_wdata;
+    reg req_buf_uncached;
     always @(posedge clk) begin
         req_buf_index <= index;
         req_buf_tag <= tag;
         req_buf_offset <= offset;
         req_buf_write <= write;
         req_buf_wstrb <= wstrb;
+        req_buf_size <= size;
         req_buf_wdata <= wdata;
+        req_buf_uncached <= uncached;
     end
 
     // cache table
@@ -144,7 +152,7 @@ module cache #
             .v_write(v_write)
         );
 
-    wire hit = |hit_way & (state == LOOKUP);
+    wire hit = ~req_buf_uncached & |hit_way & (state == LOOKUP);
     wire hit_write = hit & req_buf_write;
 
     // write buffer
@@ -193,26 +201,29 @@ module cache #
 
     wire lookup_to_lookup = (state == LOOKUP) & (hit & valid & ~write_overlap);
     wire lookup_to_idle = (state == LOOKUP) & (hit & ~lookup_to_lookup);
-    wire lookup_to_miss = (state == LOOKUP) & (~hit & ~dirty);
-    wire lookup_to_dirty_miss = (state == LOOKUP) & (~hit & dirty);
+    wire lookup_to_miss = (state == LOOKUP) &
+         (~hit & (~dirty | req_buf_uncached & ~req_buf_write));
+    wire lookup_to_dirty_miss = (state == LOOKUP) &
+         (~hit & (dirty | req_buf_uncached & req_buf_write));
 
     wire miss_to_miss = (state == MISS) & ~rd_rdy;
     wire miss_to_refill = (state == MISS) & rd_rdy;
 
     wire dirty_miss_to_dirty_miss = (state == DIRTY_MISS) & ~wr_rdy;
-    wire dirty_miss_to_replace = (state == DIRTY_MISS) & wr_rdy;
+    wire dirty_miss_to_replace = (state == DIRTY_MISS) & wr_rdy & ~replace_buf_uncached;
+    wire dirty_miss_to_idle = (state == DIRTY_MISS) & wr_rdy & replace_buf_uncached;
 
     wire replace_to_replace = (state == REPLACE) & ~rd_rdy;
     wire replace_to_refill = (state == REPLACE) & rd_rdy;
 
-    wire refill_to_refill = (state == REFILL) & ~(ret_valid && (ret_last));
+    wire refill_to_refill = (state == REFILL) & ~(ret_valid && ret_last);
     wire refill_to_idle = (state == REFILL) & ~refill_to_refill;
 
     mux_1h #(.num_port(STATE_NUM), .data_width(STATE_BITS)) next_state_mux
            (
                .select(
                    {
-                       idle_to_idle | lookup_to_idle | refill_to_idle,
+                       idle_to_idle | lookup_to_idle | refill_to_idle | dirty_miss_to_idle,
                        idle_to_lookup | lookup_to_lookup,
                        lookup_to_miss | miss_to_miss,
                        lookup_to_dirty_miss | dirty_miss_to_dirty_miss,
@@ -263,8 +274,10 @@ module cache #
     reg replace_buf_write;
     reg [31:0] replace_buf_wdata;
     reg [3:0] replace_buf_wstrb;
+    reg [1:0] replace_buf_size;
     wire [BANK_NUM_WIDTH-1:0] replace_buf_bank_num =
          get_bank_num(replace_buf_offset);
+    reg replace_buf_uncached;
     always @(posedge clk) begin
         if (state == LOOKUP) begin
             replace_buf_index <= req_buf_index;
@@ -274,6 +287,8 @@ module cache #
             replace_buf_write <= req_buf_write;
             replace_buf_wdata <= req_buf_wdata;
             replace_buf_wstrb <= req_buf_wstrb;
+            replace_buf_size <= req_buf_size;
+            replace_buf_uncached <= req_buf_uncached;
         end
     end
 
@@ -286,12 +301,15 @@ module cache #
     // REPLACE
     // Output the cache line that needs to be replaced.
     ////
-    assign wr_data = read_line;
-    assign wr_addr = {
+    assign wr_data = replace_buf_uncached ?
+           {{(WORDS_PER_LINE-1)*32{1'b0}}, replace_buf_wdata} : read_line;
+    assign wr_addr =
+           {
                read_tag,
                replace_buf_index,
-               replace_buf_offset
+               replace_buf_uncached ? replace_buf_offset : {OFFSET_WIDTH{1'b0}}
            };
+    assign wr_strb = replace_buf_wstrb;
 
     reg first_cycle_of_REPLACE;
     always @(posedge clk) begin
@@ -405,15 +423,28 @@ module cache #
 
     // I/O
     assign addr_ok = state_next == LOOKUP;
-    assign burst = 0; // TODO: remove this when implementing uncached requests
-    wire refill_data_ok = (state == REFILL)
-         && refill_requested_word && ret_valid && (~replace_buf_write);
+    assign burst = ~replace_buf_uncached;
     wire lookup_data_ok = (state == LOOKUP)
          && (hit | req_buf_write /* writes don't stall */);
-    assign data_ok = refill_data_ok | lookup_data_ok;
-    assign rdata = refill_data_ok ? refill_word : lookup_rdata;
+    wire refill_data_ok_cached = (state == REFILL) && ~replace_buf_uncached
+         && refill_requested_word && ret_valid && (~replace_buf_write);
+    wire refill_data_ok_uncached = (state == REFILL) && replace_buf_uncached
+         && ret_valid && ret_last;
+    assign data_ok = refill_data_ok_cached | refill_data_ok_uncached | lookup_data_ok;
+    mux_1h #(.num_port(3), .data_width(32)) rdata_mux(
+        .select({lookup_data_ok, refill_data_ok_cached, replace_buf_uncached}),
+        .in(    {lookup_rdata  , refill_word          , ret_data            }),
+        .out(rdata)
+    );
 
     assign rd_req = (state == REPLACE) || (state == MISS);
-    assign rd_addr = {replace_buf_tag_new, replace_buf_index, {OFFSET_WIDTH{1'b0}}};
-    assign wr_req = first_cycle_of_REPLACE;
+    assign rd_addr =
+           {
+               replace_buf_tag_new,
+               replace_buf_index,
+               replace_buf_uncached ?  replace_buf_offset : {OFFSET_WIDTH{1'b0}}
+           };
+    assign rd_size = replace_buf_size;
+    assign wr_req = first_cycle_of_REPLACE; // TODO !!!!!!!!!!!!!
+    assign wr_size = replace_buf_size;
 endmodule
