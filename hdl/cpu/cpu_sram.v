@@ -23,6 +23,7 @@ module cpu_sram #
         input [5:0] ext_int,
 
         output inst_sram_req,
+        output inst_sram_cached,
         output inst_sram_wr,
         output [1:0] inst_sram_size,
         output [3:0] inst_sram_wstrb,
@@ -33,6 +34,7 @@ module cpu_sram #
         input [31:0] inst_sram_rdata,
 
         output data_sram_req,
+        output data_sram_cached,
         output data_sram_wr,
         output [1:0] data_sram_size,
         output [3:0] data_sram_wstrb,
@@ -292,7 +294,9 @@ module cpu_sram #
     wire [4:0] reg_write_addr_ID;
 
     wire reg_write_EX;
+    // verilator lint_off unused
     wire reg_write_is_alu_EX;
+    // verilator lint_on unused
     wire reg_write_is_mem_EX; // for load-use hazard detection
     wire [4:0] reg_write_addr_EX;
 
@@ -401,16 +405,18 @@ module cpu_sram #
     wire [7:0] cp0_entry_hi_asid;
     wire [2:0] cp0_config_k0;
 
-    wire [TLBNUM_WIDTH-1:0] tlbp_result_EX;
-    wire [TLBNUM_WIDTH-1:0] tlbp_result_MEM;
-    wire [TLBNUM_WIDTH-1:0] tlbp_result_WB;
+    wire [TLBNUM_WIDTH:0] tlbp_result_EX;
+    wire [TLBNUM_WIDTH:0] tlbp_result_MEM;
+    wire [TLBNUM_WIDTH:0] tlbp_result_WB;
 
     // pipeline registers control signals
     wire _pre_IF_reg_valid_in = ~reset;
     wire _pre_IF_reg_valid_out;
     wire _pre_IF_reg_allow_out;
     wire _pre_IF_reg_valid;
+    // verilator lint_off unused
     wire _pre_IF_reg_allow_in;
+    // verilator lint_on unused
     wire _pre_IF_reg_stall;
     wire _pre_IF_reg_flush = 0;
     wire leaving_pre_IF = _pre_IF_reg_valid_out && _pre_IF_reg_allow_out;
@@ -458,7 +464,9 @@ module cpu_sram #
     wire EX_MEM_reg_stall = EX_MEM_reg_stall_wait_for_data;
 
     wire MEM_WB_reg_valid_in = EX_MEM_reg_valid_out;
+    // verilator lint_off unused
     wire MEM_WB_reg_valid_out;
+    // verilator lint_on unused
     wire MEM_WB_reg_allow_out = 1;
     wire MEM_WB_reg_stall = 0;
     wire MEM_WB_reg_valid;
@@ -688,7 +696,7 @@ module cpu_sram #
                           1 + 5 +
                           32 +
                           1 +
-                          TLBNUM_WIDTH +
+                          TLBNUM_WIDTH+1 +
                           1 + 1 + 1 +
                           1 +
                           19))
@@ -734,7 +742,7 @@ module cpu_sram #
                  );
 
     pipeline_reg #(.WIDTH(
-                       32 + 38 + 32 + 9 + 1 + 5 + 32 + TLBNUM_WIDTH + 1 + 1 + 1 + 1 + 19))
+                       32 + 38 + 32 + 9 + 1 + 5 + 32 + TLBNUM_WIDTH+1 + 1 + 1 + 1 + 1 + 19))
                  MEM_WB_reg(
                      .clk(clk),
                      .reset(reset),
@@ -787,10 +795,14 @@ module cpu_sram #
     wire s0_odd_page;
     wire [7:0] s0_asid = cp0_entry_hi_asid;
     wire s0_found;
+    // verilator lint_off unused
     wire [$clog2(TLBNUM)-1:0] s0_index;
+    // verilator lint_on unused
     wire [19:0] s0_pfn;
     wire [2:0] s0_c;
+    // verilator lint_off unused
     wire s0_d;
+    // verilator lint_on unused
     wire s0_v;
 
     // search port 1
@@ -896,6 +908,7 @@ module cpu_sram #
                .reset(reset),
 
                .inst_sram_req(inst_sram_req),
+               .inst_sram_cached(inst_sram_cached),
                .inst_sram_wr(inst_sram_wr),
                .inst_sram_size(inst_sram_size),
                .inst_sram_wstrb(inst_sram_wstrb),
@@ -943,6 +956,8 @@ module cpu_sram #
                .found(s0_found),
                .v(s0_v),
                .c(s0_c),
+
+               .cp0_config_k0(cp0_config_k0),
 
                .tlb_refill(tlb_refill_pre_IF)
            );
@@ -1348,6 +1363,7 @@ module cpu_sram #
     wire tlb_mod;
     data_sram_request #(.TLB(TLB)) data_sram_request(
                           .data_sram_req(data_sram_req),
+                          .data_sram_cached(data_sram_cached),
                           .data_sram_wr(data_sram_wr),
                           .data_sram_size(data_sram_size),
                           .data_sram_wstrb(data_sram_wstrb),
@@ -1384,10 +1400,13 @@ module cpu_sram #
                           .found(s1_found),
                           .v(s1_v),
                           .d(s1_d),
+                          .c(s1_c),
 
                           .tlb_refill(tlb_refill_d),
                           .tlb_error(tlb_error_d),
-                          .tlb_mod(tlb_mod)
+                          .tlb_mod(tlb_mod),
+
+                          .cp0_config_k0(cp0_config_k0)
                       );
     assign s1_vpn2 = tlbp_EX ? cp0_entry_hi_vpn2 : s1_vpn2_req;
     assign tlbp_result_EX = {~s1_found, s1_index};

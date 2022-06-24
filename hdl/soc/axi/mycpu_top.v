@@ -48,6 +48,7 @@ module mycpu_top(
     );
     //cpu inst sram
     wire        cpu_inst_req;
+    wire        cpu_inst_cached; 
     wire        cpu_inst_wr;
     wire [1 :0] cpu_inst_size;
     wire [3 :0] cpu_inst_wstrb;
@@ -59,6 +60,7 @@ module mycpu_top(
 
     //cpu data sram
     wire        cpu_data_req;
+    wire        cpu_data_cached;
     wire        cpu_data_wr;
     wire [1 :0] cpu_data_size;
     wire [3 :0] cpu_data_wstrb;
@@ -77,6 +79,7 @@ module mycpu_top(
                  .ext_int          (ext_int),
 
                  .inst_sram_req    (cpu_inst_req    ),
+                 .inst_sram_cached (cpu_inst_cached ),
                  .inst_sram_wr     (cpu_inst_wr     ),
                  .inst_sram_size   (cpu_inst_size   ),
                  .inst_sram_wstrb  (cpu_inst_wstrb  ),
@@ -87,6 +90,7 @@ module mycpu_top(
                  .inst_sram_rdata  (cpu_inst_rdata  ),
 
                  .data_sram_req    (cpu_data_req    ),
+                 .data_sram_cached (cpu_data_cached ),
                  .data_sram_wr     (cpu_data_wr     ),
                  .data_sram_size   (cpu_data_size   ),
                  .data_sram_wstrb  (cpu_data_wstrb  ),
@@ -103,30 +107,32 @@ module mycpu_top(
                  .debug_wb_rf_wdata(debug_wb_rf_wdata)
              );
 
-    cpu_axi_interface
-        cpu_axi_interface(
+    sram_to_axi
+        sram_to_axi(
             .clk(aclk),
-            .resetn(aresetn),
+            .reset(~aresetn),
 
-            .inst_req    (cpu_inst_req    ),
-            .inst_wr     (cpu_inst_wr     ),
-            .inst_size   (cpu_inst_size   ),
-            .inst_wstrb  (cpu_inst_wstrb  ),
-            .inst_addr   (cpu_inst_addr   ),
-            .inst_wdata  (cpu_inst_wdata  ),
-            .inst_addr_ok(cpu_inst_addr_ok),
-            .inst_data_ok(cpu_inst_data_ok),
-            .inst_rdata  (cpu_inst_rdata  ),
+            .i_req    (cpu_inst_req    ),
+            .i_uncached(~cpu_inst_cached),
+            .i_wr     (cpu_inst_wr     ),
+            .i_size   (cpu_inst_size   ),
+            .i_wstrb  (cpu_inst_wstrb  ),
+            .i_addr   (cpu_inst_addr   ),
+            .i_wdata  (cpu_inst_wdata  ),
+            .i_addr_ok(cpu_inst_addr_ok),
+            .i_data_ok(cpu_inst_data_ok),
+            .i_rdata  (cpu_inst_rdata  ),
 
-            .data_req    (cpu_data_req    ),
-            .data_wr     (cpu_data_wr     ),
-            .data_size   (cpu_data_size   ),
-            .data_wstrb  (cpu_data_wstrb  ),
-            .data_addr   (cpu_data_addr   ),
-            .data_wdata  (cpu_data_wdata  ),
-            .data_addr_ok(cpu_data_addr_ok),
-            .data_data_ok(cpu_data_data_ok),
-            .data_rdata  (cpu_data_rdata  ),
+            .d_req    (cpu_data_req    ),
+            .d_uncached(~cpu_data_cached),
+            .d_wr     (cpu_data_wr     ),
+            .d_size   (cpu_data_size   ),
+            .d_wstrb  (cpu_data_wstrb  ),
+            .d_addr   (cpu_data_addr   ),
+            .d_wdata  (cpu_data_wdata  ),
+            .d_addr_ok(cpu_data_addr_ok),
+            .d_data_ok(cpu_data_data_ok),
+            .d_rdata  (cpu_data_rdata  ),
 
 
             .arid(arid),

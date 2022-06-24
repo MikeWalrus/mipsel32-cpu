@@ -4,6 +4,7 @@ module data_sram_request #
 )
 (
         output data_sram_req,
+        output data_sram_cached,
         output data_sram_wr,
         output [1:0] data_sram_size,
         output [3:0] data_sram_wstrb,
@@ -39,6 +40,9 @@ module data_sram_request #
         input found,
         input v,
         input d,
+        input [2:0] c,
+
+        input [2:0] cp0_config_k0,
 
         output tlb_refill,
         output tlb_error,
@@ -122,10 +126,13 @@ module data_sram_request #
                    .virt_addr(virt_addr),
                    .phy_addr(data_sram_addr),
                    .tlb_mapped(virt_mapped),
+                   .cached(data_sram_cached),
 
                    .vpn2(vpn2),
                    .odd_page(odd_page),
-                   .pfn(pfn)
+                   .pfn(pfn),
+                   .c(c),
+                   .cp0_config_k0(cp0_config_k0)
                );
     assign tlb_refill = virt_mapped & ~found;
     assign tlb_error = virt_mapped & (mem_ren_EX | mem_wen_EX) & ~(found & v);

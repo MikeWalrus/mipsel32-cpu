@@ -9,6 +9,7 @@ module pre_IF #
 
         // sram-like
         output inst_sram_req,
+        output inst_sram_cached,
         output inst_sram_wr,
         output [1:0] inst_sram_size,
         output [3:0] inst_sram_wstrb,
