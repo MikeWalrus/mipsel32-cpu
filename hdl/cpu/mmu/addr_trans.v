@@ -40,10 +40,32 @@ module addr_trans #
     if (!TLB) begin
         assign tlb_mapped = 0;
         assign mapped_addr = virt_addr;
+        mux_1h #(.num_port(3), .data_width(1))
+               cached_mux(
+                   .select({kseg0, kseg1, mapped}),
+                   .in(
+                       {
+                           cp0_config_k0 == is_cached,
+                           1'b0,
+                           1'b0 // NOTE: not sure about this
+                       }),
+                   .out(cached)
+               );
     end else begin
         assign tlb_mapped = mapped;
         assign {vpn2, odd_page} = virt_addr[31-:20];
         assign mapped_addr = {pfn, virt_addr[0+:12]};
+        mux_1h #(.num_port(3), .data_width(1))
+               cached_mux(
+                   .select({kseg0, kseg1, mapped}),
+                   .in(
+                       {
+                           cp0_config_k0 == is_cached,
+                           1'b0,
+                           c == is_cached
+                       }),
+                   .out(cached)
+               );
     end
 
     mux_1h #(.num_port(3))
@@ -60,15 +82,4 @@ module addr_trans #
 
     localparam [2:0] is_cached = 3'h3;
 
-    mux_1h #(.num_port(3), .data_width(1))
-           cached_mux(
-               .select({kseg0, kseg1, mapped}),
-               .in(
-                   {
-                       cp0_config_k0 == is_cached,
-                       1'b0,
-                       c == is_cached
-                   }),
-               .out(cached)
-           );
 endmodule

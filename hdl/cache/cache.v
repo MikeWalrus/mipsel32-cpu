@@ -305,7 +305,7 @@ module cache #
            {{(WORDS_PER_LINE-1)*32{1'b0}}, replace_buf_wdata} : read_line;
     assign wr_addr =
            {
-               read_tag,
+               replace_buf_uncached ? replace_buf_tag_new : read_tag,
                replace_buf_index,
                replace_buf_uncached ? replace_buf_offset : {OFFSET_WIDTH{1'b0}}
            };
@@ -445,6 +445,6 @@ module cache #
                replace_buf_uncached ?  replace_buf_offset : {OFFSET_WIDTH{1'b0}}
            };
     assign rd_size = replace_buf_size;
-    assign wr_req = first_cycle_of_REPLACE; // TODO !!!!!!!!!!!!!
+    assign wr_req = replace_buf_uncached ? (state == DIRTY_MISS) : first_cycle_of_REPLACE;
     assign wr_size = replace_buf_size;
 endmodule

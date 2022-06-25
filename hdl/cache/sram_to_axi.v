@@ -64,9 +64,13 @@ module sram_to_axi #
         output        arvalid      ,
         input         arready      ,
         //r
+        // verilator lint_off UNUSED
         input  [3 :0] rid          ,
+        // verilator lint_on UNUSED
         input  [31:0] rdata        ,
+        // verilator lint_off UNUSED
         input  [1 :0] rresp        ,
+        // verilator lint_on UNUSED
         input         rlast        ,
         input         rvalid       ,
         output        rready       ,
@@ -89,8 +93,10 @@ module sram_to_axi #
         output        wvalid       ,
         input         wready       ,
         //b
+// verilator lint_off UNUSED
         input  [3 :0] bid          ,
         input  [1 :0] bresp        ,
+// verilator lint_on UNUSED
         input         bvalid       ,
         output        bready
     );
@@ -111,12 +117,14 @@ module sram_to_axi #
     wire [1:0] i_cache_rd_size;
     wire i_cache_rd_rdy = arready & i_cache_ar_now;
     wire i_cache_ret_valid = rvalid;
+// verilator lint_off UNUSED
     wire i_cache_wr_req;
     wire [31:0] i_cache_wr_addr;
     wire [1:0] i_cache_wr_size;
     wire [I_LINE_WIDTH-1:0] i_cache_wr_data;
     wire i_cache_wr_rdy = 0;
     wire [3:0] i_cache_wr_strb;
+// verilator lint_on UNUSED
 
     cache
         #(
@@ -309,6 +317,8 @@ module sram_to_axi #
     reg [D_LINE_WIDTH-1:0] d_cache_wr_buf_data;
     reg [31:0] d_cache_wr_buf_addr;
     reg d_cache_wr_buf_burst;
+    reg [1:0] d_cache_wr_buf_size;
+    reg [3:0] d_cache_wr_buf_strb;
     reg d_cache_wr_buf_data_empty;
     reg [D_BANK_NUM_WIDTH-1:0] d_cache_wr_buf_data_ptr;
 
@@ -328,12 +338,26 @@ module sram_to_axi #
         end
     end
 
+    reg wvalid_reg;
+    always @(posedge clk) begin
+        if (reset) begin
+            wvalid_reg <= 0;
+        end else begin
+            if (d_cache_wr_buf_data_accept)
+                wvalid_reg <= 1;
+            else if (d_cache_wr_buf_data_finish)
+                wvalid_reg <= 0;
+        end
+    end
+
     always @(posedge clk) begin
         if (d_cache_wr_buf_data_accept) begin
             d_cache_wr_buf_data_ptr <= 0;
             d_cache_wr_buf_data <= d_cache_wr_data;
             d_cache_wr_buf_addr <= d_cache_wr_addr;
             d_cache_wr_buf_burst <= d_cache_burst;
+            d_cache_wr_buf_strb <= d_cache_wr_strb;
+            d_cache_wr_buf_size <= d_cache_wr_size;
         end else begin
             if (wready)
                 d_cache_wr_buf_data_ptr <= d_cache_wr_buf_data_ptr + 1;
@@ -353,6 +377,7 @@ module sram_to_axi #
 
     assign awvalid = d_cache_wr_now;
 
+    // TODO: Remove this if unused
     reg waiting_for_awready;
     always @(posedge clk) begin
         if (reset) begin
@@ -380,21 +405,32 @@ module sram_to_axi #
     end
 
     mux_1h
-        #(.num_port(3), .data_width(32 + 3 + 2 + 8)) wr_mux (
+        #(.num_port(4), .data_width(32 + 3 + 2 + 8)) wr_mux (
             .select(
                 {
-                    d_cache_wr_buf_data_accept,
-                    d_cache_wr_reg,
-                    1'b0 /*TODO*/
+                    d_cache_wr_buf_data_accept & d_cache_burst,
+                    d_cache_wr_reg & d_cache_wr_buf_burst,
+                    d_cache_wr_buf_data_accept & ~d_cache_burst,
+                    d_cache_wr_reg & ~d_cache_wr_buf_burst
                 }),
             .in(
                 {
                     {d_cache_wr_addr, 3'b011, BURST_INCR, D_AXI_LEN},
                     {d_cache_wr_buf_addr, 3'b011, BURST_INCR, D_AXI_LEN},
-                    {d_addr, {1'b0, d_size}, BURST_FIXED, 8'b0}
+                    {d_cache_wr_addr, {1'b0, d_cache_wr_size}, BURST_FIXED, 8'b0},
+                    {d_cache_wr_buf_addr, {1'b0, d_cache_wr_buf_size}, BURST_FIXED, 8'b0}
                 }
             ),
             .out({awaddr, awsize, awburst, awlen})
         );
-    assign {wdata, wstrb, wlast, wvalid} = {d_cache_wr_buf_data[d_cache_wr_buf_data_ptr * 32 +: 32], 4'b1111, d_cache_wr_buf_data_last, 1'b1};
+    assign {wdata, wstrb, wlast, wvalid} =
+           {d_cache_wr_buf_data[d_cache_wr_buf_data_ptr * 32 +: 32], d_cache_wr_buf_strb, d_cache_wr_buf_data_last, wvalid_reg};
+
+    assign awid = 0;
+    assign awlock = 0;
+    assign awcache = 0;
+    assign awprot = 0;
+    assign wid = 0;
+
+    assign bready = 1;
 endmodule

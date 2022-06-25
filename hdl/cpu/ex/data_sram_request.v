@@ -1,8 +1,8 @@
 module data_sram_request #
-(
-    parameter TLB = 1
-)
-(
+    (
+        parameter TLB = 1
+    )
+    (
         output data_sram_req,
         output data_sram_cached,
         output data_sram_wr,
@@ -48,12 +48,13 @@ module data_sram_request #
         output tlb_error,
         output tlb_mod
     );
-    assign data_sram_req = ID_EX_reg_valid
-           & (mem_ren_EX | mem_wen_EX)
-           // avoid sending multiple requests when stalling:
-           & ID_EX_reg_allow_out
-           // avoid sending request when exceptions have happened:
-           & ~exception_EX_MEM_WB;
+    assign data_sram_req =
+           (ID_EX_reg_valid
+            & (mem_ren_EX | mem_wen_EX)
+            // avoid sending multiple requests when stalling:
+            & ID_EX_reg_allow_out
+            // avoid sending request when exceptions have happened:
+            & ~exception_EX_MEM_WB) ? 1 : 0;
 
     reg [2:0] wstrb_count;
     integer i;

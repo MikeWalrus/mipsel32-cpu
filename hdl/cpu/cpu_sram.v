@@ -2,7 +2,7 @@
 module cpu_sram #
     (
         // TLB
-        parameter TLB = 1,
+        parameter TLB = 0,
         parameter TLBNUM = 2,
         parameter TLBNUM_WIDTH = $clog2(TLBNUM),
 
