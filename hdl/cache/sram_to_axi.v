@@ -107,6 +107,9 @@ module sram_to_axi #
     localparam [7:0] I_AXI_LEN = I_BYTES_PER_LINE/4-1;
     localparam [7:0] D_AXI_LEN = D_BYTES_PER_LINE/4-1;
 
+    wire i_cache_ar_now;
+    wire d_cache_ar_now;
+
     wire i_cache_req = i_req;
     wire i_cache_addr_ok;
     wire i_cache_burst;
@@ -181,6 +184,7 @@ module sram_to_axi #
     wire [31:0] d_cache_wr_addr;
     wire [1:0] d_cache_wr_size;
     wire [D_LINE_WIDTH-1:0] d_cache_wr_data;
+    wire d_cache_wr_buf_data_ready;
     wire d_cache_wr_rdy = d_cache_wr_buf_data_ready;
     wire [3:0] d_cache_wr_strb;
 
@@ -230,9 +234,6 @@ module sram_to_axi #
 
     assign i_addr_ok = i_cache_addr_ok;
     assign d_addr_ok = d_cache_addr_ok;
-
-    wire i_cache_ar_now;
-    wire d_cache_ar_now;
 
     reg i_arvalid_reg;
     reg d_arvalid_reg;
@@ -324,7 +325,7 @@ module sram_to_axi #
 
     wire d_cache_wr_buf_data_last = d_cache_wr_buf_burst ? &d_cache_wr_buf_data_ptr : 1'b1;
     wire d_cache_wr_buf_data_finish = d_cache_wr_buf_data_last & wready;
-    wire d_cache_wr_buf_data_ready = d_cache_wr_buf_data_empty | d_cache_wr_buf_data_finish;
+    assign d_cache_wr_buf_data_ready = d_cache_wr_buf_data_empty | d_cache_wr_buf_data_finish;
     wire d_cache_wr_buf_data_accept = d_cache_wr_buf_data_ready & d_cache_wr_req;
     always @(posedge clk) begin
         if (reset) begin

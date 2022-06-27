@@ -86,6 +86,34 @@ module cache #
         req_buf_uncached <= uncached;
     end
 
+    // replace buffer
+    reg [INDEX_WIDTH-1:0] replace_buf_index;
+    reg [TAG_WIDTH-1:0] replace_buf_tag_new;
+    reg [NUM_WAY-1:0] replace_buf_replace_way;
+    reg [OFFSET_WIDTH-1:0] replace_buf_offset;
+    reg replace_buf_write;
+    reg [31:0] replace_buf_wdata;
+    reg [3:0] replace_buf_wstrb;
+    reg [1:0] replace_buf_size;
+    wire [BANK_NUM_WIDTH-1:0] replace_buf_bank_num =
+         get_bank_num(replace_buf_offset);
+    reg replace_buf_uncached;
+    wire [NUM_WAY-1:0] replace_way;
+    always @(posedge clk) begin
+        if (state == LOOKUP) begin
+            replace_buf_index <= req_buf_index;
+            replace_buf_tag_new <= req_buf_tag;
+            replace_buf_replace_way <= replace_way;
+            replace_buf_offset <= req_buf_offset;
+            replace_buf_write <= req_buf_write;
+            replace_buf_wdata <= req_buf_wdata;
+            replace_buf_wstrb <= req_buf_wstrb;
+            replace_buf_size <= req_buf_size;
+            replace_buf_uncached <= req_buf_uncached;
+        end
+    end
+
+
     // cache table
     wire [NUM_WAY-1:0] hit_way;
     wire [NUM_WAY-1:0] v_ways;
@@ -253,7 +281,6 @@ module cache #
                write_buf_wdata[i*8+:8] : table_rdata[i*8+:8];
     end
 
-    wire [NUM_WAY-1:0] replace_way;
     replace_way_gen #(.NUM_WAY(NUM_WAY)) replace_way_gen(
                         .clk(clk),
                         .reset(reset),
@@ -265,32 +292,6 @@ module cache #
     // D table read ports
     assign d_way = replace_way;
     assign d_index = req_buf_index;
-
-    // replace buffer
-    reg [INDEX_WIDTH-1:0] replace_buf_index;
-    reg [TAG_WIDTH-1:0] replace_buf_tag_new;
-    reg [NUM_WAY-1:0] replace_buf_replace_way;
-    reg [OFFSET_WIDTH-1:0] replace_buf_offset;
-    reg replace_buf_write;
-    reg [31:0] replace_buf_wdata;
-    reg [3:0] replace_buf_wstrb;
-    reg [1:0] replace_buf_size;
-    wire [BANK_NUM_WIDTH-1:0] replace_buf_bank_num =
-         get_bank_num(replace_buf_offset);
-    reg replace_buf_uncached;
-    always @(posedge clk) begin
-        if (state == LOOKUP) begin
-            replace_buf_index <= req_buf_index;
-            replace_buf_tag_new <= req_buf_tag;
-            replace_buf_replace_way <= replace_way;
-            replace_buf_offset <= req_buf_offset;
-            replace_buf_write <= req_buf_write;
-            replace_buf_wdata <= req_buf_wdata;
-            replace_buf_wstrb <= req_buf_wstrb;
-            replace_buf_size <= req_buf_size;
-            replace_buf_uncached <= req_buf_uncached;
-        end
-    end
 
     ////
     // DIRTY_MISS

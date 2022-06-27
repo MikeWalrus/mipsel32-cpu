@@ -131,6 +131,23 @@ module control(
 
     wire is_special2   = opcode == 6'b011100;
 
+    // CP0
+    wire cp0 = opcode == 6'b010000;
+    assign mtc0 = cp0 & rs == 5'b00100;
+    assign mfc0 = cp0 & rs == 5'b00000;
+    wire co = rs[4] == 1;
+    assign eret =  cp0 & co & (func == 6'b011000);
+    assign tlbp =  cp0 & co & (func == 6'b001000);
+    assign tlbwi = cp0 & co & (func == 6'b000010);
+    assign tlbr =  cp0 & co & (func == 6'b000001);
+
+    wire branch_link;
+    wire link = is_jal | branch_link | (is_R_type & func_jalr);
+    wire link_31 = is_jal | branch_link;
+
+    wire is_load = |{is_lw, is_lb, is_lbu, is_lh, is_lhu, is_lwl, is_lwr};
+    wire is_store = |{is_sw, is_sb, is_sh, is_swl, is_swr};
+
     wire alu_op_add = (is_R_type & (func_add | func_addu | func_jalr))
          | is_addiu | is_addi | is_load | is_store | link;//0
     wire alu_op_sub = (is_R_type & (func_subu | func_sub));//1
@@ -146,29 +163,13 @@ module control(
     wire alu_op_lui = (is_lui);//11
     wire alu_op_clo = is_special2 & func == 6'b100001;//12
     wire alu_op_clz = is_special2 & func == 6'b100000;//13
+
     assign alu_op = {
                alu_op_clz, alu_op_clo, alu_op_lui,
                alu_op_sra, alu_op_srl, alu_op_sll,
                alu_op_xor, alu_op_or, alu_op_nor, alu_op_and,
                alu_op_sltu, alu_op_slt, alu_op_sub, alu_op_add
            };// must be the same order as in alu.vh
-
-    // CP0
-    wire cp0 = opcode == 6'b010000;
-    assign mtc0 = cp0 & rs == 5'b00100;
-    assign mfc0 = cp0 & rs == 5'b00000;
-    wire co = rs[4] == 1;
-    assign eret =  cp0 & co & (func == 6'b011000);
-    assign tlbp =  cp0 & co & (func == 6'b001000);
-    assign tlbwi = cp0 & co & (func == 6'b000010);
-    assign tlbr =  cp0 & co & (func == 6'b000001);
-
-    wire is_load = |{is_lw, is_lb, is_lbu, is_lh, is_lhu, is_lwl, is_lwr};
-    wire is_store = |{is_sw, is_sb, is_sh, is_swl, is_swr};
-
-    wire branch_link;
-    wire link = is_jal | branch_link | (is_R_type & func_jalr);
-    wire link_31 = is_jal | branch_link;
 
     assign imm_arith =
            is_addiu | is_addi | is_slti | is_sltiu | is_lui |
