@@ -33,21 +33,21 @@ module cpu_sram #
         input inst_sram_data_ok,
         input [31:0] inst_sram_rdata,
 
-        output data_sram_req,
-        output data_sram_cached,
+        (* MARK_DEBUG = "TRUE" *)output data_sram_req,
+        (* MARK_DEBUG = "TRUE" *)output data_sram_cached,
         output data_sram_wr,
         output [1:0] data_sram_size,
         output [3:0] data_sram_wstrb,
-        output [31:0] data_sram_addr,
+        (* MARK_DEBUG = "TRUE" *)output [31:0] data_sram_addr,
         output [31:0] data_sram_wdata,
         input data_sram_addr_ok,
         input data_sram_data_ok,
         input [31:0] data_sram_rdata,
 
         output [31:0] debug_wb_pc,
-        output [3:0] debug_wb_rf_wen,
-        output [4:0] debug_wb_rf_wnum,
-        output [31:0] debug_wb_rf_wdata
+        (* MARK_DEBUG = "TRUE" *)output [3:0] debug_wb_rf_wen,
+        (* MARK_DEBUG = "TRUE" *)output [4:0] debug_wb_rf_wnum,
+        (* MARK_DEBUG = "TRUE" *)output [31:0] debug_wb_rf_wdata
     );
     wire reset;
     assign reset = ~resetn;
@@ -59,12 +59,12 @@ module cpu_sram #
     wire data_sram_req_MEM;
 
     // pc
-    wire [31:0] curr_pc_pre_IF;
-    wire [31:0] curr_pc_IF;
-    wire [31:0] curr_pc_ID;
-    wire [31:0] curr_pc_EX;
-    wire [31:0] curr_pc_MEM;
-    wire [31:0] curr_pc_WB;
+    (* MARK_DEBUG = "TRUE" *)wire [31:0] curr_pc_pre_IF;
+    (* MARK_DEBUG = "TRUE" *)wire [31:0] curr_pc_IF;
+    (* MARK_DEBUG = "TRUE" *)wire [31:0] curr_pc_ID;
+    (* MARK_DEBUG = "TRUE" *)wire [31:0] curr_pc_EX;
+    (* MARK_DEBUG = "TRUE" *)wire [31:0] curr_pc_MEM;
+    (* MARK_DEBUG = "TRUE" *)wire [31:0] curr_pc_WB;
 
 
     // instruction

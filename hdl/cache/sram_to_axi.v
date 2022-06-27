@@ -93,10 +93,10 @@ module sram_to_axi #
         output        wvalid       ,
         input         wready       ,
         //b
-// verilator lint_off UNUSED
+        // verilator lint_off UNUSED
         input  [3 :0] bid          ,
         input  [1 :0] bresp        ,
-// verilator lint_on UNUSED
+        // verilator lint_on UNUSED
         input         bvalid       ,
         output        bready
     );
@@ -120,14 +120,14 @@ module sram_to_axi #
     wire [1:0] i_cache_rd_size;
     wire i_cache_rd_rdy = arready & i_cache_ar_now;
     wire i_cache_ret_valid = rvalid;
-// verilator lint_off UNUSED
+    // verilator lint_off UNUSED
     wire i_cache_wr_req;
     wire [31:0] i_cache_wr_addr;
     wire [1:0] i_cache_wr_size;
     wire [I_LINE_WIDTH-1:0] i_cache_wr_data;
     wire i_cache_wr_rdy = 0;
     wire [3:0] i_cache_wr_strb;
-// verilator lint_on UNUSED
+    // verilator lint_on UNUSED
 
     cache
         #(
@@ -184,8 +184,8 @@ module sram_to_axi #
     wire [31:0] d_cache_wr_addr;
     wire [1:0] d_cache_wr_size;
     wire [D_LINE_WIDTH-1:0] d_cache_wr_data;
-    wire d_cache_wr_buf_data_ready;
-    wire d_cache_wr_rdy = d_cache_wr_buf_data_ready;
+    wire d_cache_wr_buf_data_accept;
+    wire d_cache_wr_rdy;
     wire [3:0] d_cache_wr_strb;
 
     cache
@@ -324,14 +324,15 @@ module sram_to_axi #
     reg [D_BANK_NUM_WIDTH-1:0] d_cache_wr_buf_data_ptr;
 
     wire d_cache_wr_buf_data_last = d_cache_wr_buf_burst ? &d_cache_wr_buf_data_ptr : 1'b1;
-    wire d_cache_wr_buf_data_finish = d_cache_wr_buf_data_last & wready;
-    assign d_cache_wr_buf_data_ready = d_cache_wr_buf_data_empty | d_cache_wr_buf_data_finish;
-    wire d_cache_wr_buf_data_accept = d_cache_wr_buf_data_ready & d_cache_wr_req;
+
+    wire d_cache_wr_buf_data_finish = d_cache_wr_buf_data_last & wready & wvalid;
+    assign d_cache_wr_buf_data_accept = (d_cache_wr_buf_data_empty | d_cache_wr_buf_data_finish);
+
     always @(posedge clk) begin
         if (reset) begin
             d_cache_wr_buf_data_empty <= 1;
         end else begin
-            if (d_cache_wr_buf_data_accept) begin
+            if (d_cache_wr_rdy) begin
                 d_cache_wr_buf_data_empty <= 0;
             end else if (d_cache_wr_buf_data_finish) begin
                 d_cache_wr_buf_data_empty <= 1;
@@ -339,20 +340,8 @@ module sram_to_axi #
         end
     end
 
-    reg wvalid_reg;
     always @(posedge clk) begin
-        if (reset) begin
-            wvalid_reg <= 0;
-        end else begin
-            if (d_cache_wr_buf_data_accept)
-                wvalid_reg <= 1;
-            else if (d_cache_wr_buf_data_finish)
-                wvalid_reg <= 0;
-        end
-    end
-
-    always @(posedge clk) begin
-        if (d_cache_wr_buf_data_accept) begin
+        if (d_cache_wr_rdy) begin
             d_cache_wr_buf_data_ptr <= 0;
             d_cache_wr_buf_data <= d_cache_wr_data;
             d_cache_wr_buf_addr <= d_cache_wr_addr;
@@ -365,32 +354,19 @@ module sram_to_axi #
         end
     end
 
-    reg d_cache_wr_reg;
-    wire d_cache_wr_now = (~waiting_for_bvalid | bvalid) & (d_cache_wr_buf_data_accept | d_cache_wr_reg);
+    wire d_cache_wr_now = (~waiting_for_bvalid | bvalid) & d_cache_wr_req;
+    assign d_cache_wr_rdy = d_cache_wr_now & d_cache_wr_buf_data_accept;
 
-    always @(posedge clk) begin
-        if (reset) begin
-            d_cache_wr_reg <= 0;
-        end else begin
-            d_cache_wr_reg <= d_cache_wr_now & ~awready;
-        end
-    end
-
-    assign awvalid = d_cache_wr_now;
-
-    // TODO: Remove this if unused
     reg waiting_for_awready;
+    assign awvalid = waiting_for_awready;
     always @(posedge clk) begin
-        if (reset) begin
+        if (reset)
             waiting_for_awready <= 0;
-        end else begin
-            if (awvalid) begin
+        else begin
+            if (d_cache_wr_rdy)
                 waiting_for_awready <= 1;
-            end else begin
-                if (awready) begin
-                    waiting_for_awready <= 0;
-                end
-            end
+            else if (awready)
+                waiting_for_awready <= 0;
         end
     end
 
@@ -406,26 +382,24 @@ module sram_to_axi #
     end
 
     mux_1h
-        #(.num_port(4), .data_width(32 + 3 + 2 + 8)) wr_mux (
+        #(.num_port(2), .data_width(32 + 3 + 2 + 8)) wr_mux (
             .select(
                 {
-                    d_cache_wr_buf_data_accept & d_cache_burst,
-                    d_cache_wr_reg & d_cache_wr_buf_burst,
-                    d_cache_wr_buf_data_accept & ~d_cache_burst,
-                    d_cache_wr_reg & ~d_cache_wr_buf_burst
+                    d_cache_wr_buf_burst,
+                    ~d_cache_wr_buf_burst
                 }),
             .in(
                 {
-                    {d_cache_wr_addr, 3'b011, BURST_INCR, D_AXI_LEN},
                     {d_cache_wr_buf_addr, 3'b011, BURST_INCR, D_AXI_LEN},
-                    {d_cache_wr_addr, {1'b0, d_cache_wr_size}, BURST_FIXED, 8'b0},
                     {d_cache_wr_buf_addr, {1'b0, d_cache_wr_buf_size}, BURST_FIXED, 8'b0}
                 }
             ),
             .out({awaddr, awsize, awburst, awlen})
         );
-    assign {wdata, wstrb, wlast, wvalid} =
-           {d_cache_wr_buf_data[d_cache_wr_buf_data_ptr * 32 +: 32], d_cache_wr_buf_strb, d_cache_wr_buf_data_last, wvalid_reg};
+    assign wdata = d_cache_wr_buf_data[d_cache_wr_buf_data_ptr * 32 +: 32];
+    assign wstrb = d_cache_wr_buf_strb;
+    assign wlast = d_cache_wr_buf_data_last;
+    assign wvalid = ~d_cache_wr_buf_data_empty;
 
     assign awid = 0;
     assign awlock = 0;
