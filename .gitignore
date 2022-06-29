@@ -1,6 +1,6 @@
 test/*
 *.mif
-golden_trace.txt
+golden_trace*
 *.gtkw
 *.vcd
 *.lx2

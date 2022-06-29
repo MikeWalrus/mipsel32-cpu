@@ -1,3 +1,5 @@
+`include "cp0.vh"
+
 module addr_trans #
     (
         parameter TLB = 1
@@ -45,7 +47,7 @@ module addr_trans #
                    .select({kseg0, kseg1, mapped}),
                    .in(
                        {
-                           cp0_config_k0 == is_cached,
+                           cp0_config_k0 == `CACHED,
                            1'b0,
                            1'b0 // NOTE: not sure about this
                        }),
@@ -60,9 +62,9 @@ module addr_trans #
                    .select({kseg0, kseg1, mapped}),
                    .in(
                        {
-                           cp0_config_k0 == is_cached,
+                           cp0_config_k0 == `CACHED,
                            1'b0,
-                           c == is_cached
+                           c == `CACHED
                        }),
                    .out(cached)
                );
@@ -79,7 +81,4 @@ module addr_trans #
                    }),
                .out(phy_addr)
            );
-
-    localparam [2:0] is_cached = 3'h3;
-
 endmodule

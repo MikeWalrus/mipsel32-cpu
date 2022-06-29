@@ -259,6 +259,7 @@ module cache_top #
             .clk    (clk_g),
             .reset  (~resetn),
             .valid  (memref_valid),
+            .uncached (0),
             .write  (memref_op ),
             .index  (in_index  ),
             .tag    (in_tag    ),

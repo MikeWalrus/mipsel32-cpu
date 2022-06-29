@@ -230,19 +230,19 @@ module cache #
     wire lookup_to_lookup = (state == LOOKUP) & (hit & valid & ~write_overlap);
     wire lookup_to_idle = (state == LOOKUP) & (hit & ~lookup_to_lookup);
     wire lookup_to_miss = (state == LOOKUP) &
-         (~hit & (~dirty | req_buf_uncached & ~req_buf_write));
+         (~hit & (req_buf_uncached ? ~req_buf_write : ~dirty));
     wire lookup_to_dirty_miss = (state == LOOKUP) &
-         (~hit & (dirty | req_buf_uncached & req_buf_write));
+         (~hit & (req_buf_uncached ? req_buf_write : dirty));
 
     wire miss_to_miss = (state == MISS) & ~rd_rdy;
     wire miss_to_refill = (state == MISS) & rd_rdy;
 
     wire dirty_miss_to_dirty_miss = (state == DIRTY_MISS) & ~wr_rdy;
-    wire dirty_miss_to_replace = (state == DIRTY_MISS) & wr_rdy & ~replace_buf_uncached;
-    wire dirty_miss_to_idle = (state == DIRTY_MISS) & wr_rdy & replace_buf_uncached;
+    wire dirty_miss_to_replace = (state == DIRTY_MISS) & wr_rdy;
 
     wire replace_to_replace = (state == REPLACE) & ~rd_rdy;
-    wire replace_to_refill = (state == REPLACE) & rd_rdy;
+    wire replace_to_refill = (state == REPLACE) & rd_rdy & ~replace_buf_uncached;
+    wire replace_to_idle = (state == REPLACE) & replace_buf_uncached;
 
     wire refill_to_refill = (state == REFILL) & ~(ret_valid && ret_last);
     wire refill_to_idle = (state == REFILL) & ~refill_to_refill;
@@ -251,7 +251,7 @@ module cache #
            (
                .select(
                    {
-                       idle_to_idle | lookup_to_idle | refill_to_idle | dirty_miss_to_idle,
+                       idle_to_idle | lookup_to_idle | refill_to_idle | replace_to_idle,
                        idle_to_lookup | lookup_to_lookup,
                        lookup_to_miss | miss_to_miss,
                        lookup_to_dirty_miss | dirty_miss_to_dirty_miss,
@@ -328,7 +328,7 @@ module cache #
         if (state == IDLE) begin
             refill_buf_ptr <= 0;
         end else begin
-            if (ret_valid)
+            if (ret_valid & (state == REFILL))
                 refill_buf_ptr <= refill_buf_ptr + 1;
         end
     end
@@ -354,7 +354,7 @@ module cache #
             table_write_strb
         } = (state == REFILL) ?
         {
-            ret_valid,
+            ret_valid & ~replace_buf_uncached,
             replace_buf_index,
             refill_buf_ptr,
             replace_buf_replace_way,
@@ -371,7 +371,7 @@ module cache #
         };
 
     wire [NUM_WAY-1:0] replace_buf_replace_way_wen =
-         {NUM_WAY{state == REFILL}} & replace_buf_replace_way;
+         {NUM_WAY{state == REFILL & ~replace_buf_uncached}} & replace_buf_replace_way;
     assign {
             d_write_way,
             d_write_index,
@@ -433,10 +433,10 @@ module cache #
          && ret_valid && ret_last;
     assign data_ok = refill_data_ok_cached | refill_data_ok_uncached | lookup_data_ok;
     mux_1h #(.num_port(3), .data_width(32)) rdata_mux(
-        .select({lookup_data_ok, refill_data_ok_cached, replace_buf_uncached}),
-        .in(    {lookup_rdata  , refill_word          , ret_data            }),
-        .out(rdata)
-    );
+               .select({lookup_data_ok, refill_data_ok_cached, replace_buf_uncached}),
+               .in(    {lookup_rdata  , refill_word          , ret_data            }),
+               .out(rdata)
+           );
 
     assign rd_req = (state == REPLACE) || (state == MISS);
     assign rd_addr =
@@ -446,6 +446,6 @@ module cache #
                replace_buf_uncached ?  replace_buf_offset : {OFFSET_WIDTH{1'b0}}
            };
     assign rd_size = replace_buf_size;
-    assign wr_req = replace_buf_uncached ? (state == DIRTY_MISS) : first_cycle_of_REPLACE;
+    assign wr_req = first_cycle_of_REPLACE; // TODO: ???
     assign wr_size = replace_buf_size;
 endmodule

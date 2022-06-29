@@ -107,6 +107,8 @@ module sram_to_axi #
     localparam [7:0] I_AXI_LEN = I_BYTES_PER_LINE/4-1;
     localparam [7:0] D_AXI_LEN = D_BYTES_PER_LINE/4-1;
 
+    wire wr_idle;
+
     wire i_cache_ar_now;
     wire d_cache_ar_now;
 
@@ -246,7 +248,7 @@ module sram_to_axi #
             d_arvalid_reg <= d_cache_ar_now;
         end
     end
-    wire allow_ar = {(~waiting_for_rvalid | rvalid) & (~waiting_for_bvalid | bvalid)};
+    wire allow_ar = (~waiting_for_rvalid | (rvalid & rlast)) & wr_idle;
     isolate_rightmost
         #(.WIDTH(2)) priority_ar (
             .en(allow_ar),
@@ -274,9 +276,9 @@ module sram_to_axi #
             .in(
                 {
                     {{1'b0, i_cache_rd_size}, BURST_FIXED, 8'b0},
-                    {3'b011, BURST_INCR, I_AXI_LEN},
+                    {3'b010, BURST_INCR, I_AXI_LEN},
                     {{1'b0, d_cache_rd_size}, BURST_FIXED, 8'b0},
-                    {3'b011, BURST_INCR, D_AXI_LEN}
+                    {3'b010, BURST_INCR, D_AXI_LEN}
                 }),
             .out(
                 {arsize, arburst, arlen}
@@ -300,7 +302,7 @@ module sram_to_axi #
             if (arvalid & arready) begin
                 waiting_for_rvalid <= 1;
             end else begin
-                if (rvalid)
+                if (rvalid & rlast)
                     waiting_for_rvalid <= 0;
             end
         end
@@ -308,104 +310,62 @@ module sram_to_axi #
 
     assign rready = 1;
 
-
     assign i_rdata = i_cache_rdata;
     assign i_data_ok = i_cache_data_ok;
 
     assign d_rdata = d_cache_rdata;
     assign d_data_ok = d_cache_data_ok;
 
-    reg [D_LINE_WIDTH-1:0] d_cache_wr_buf_data;
-    reg [31:0] d_cache_wr_buf_addr;
-    reg d_cache_wr_buf_burst;
-    reg [1:0] d_cache_wr_buf_size;
-    reg [3:0] d_cache_wr_buf_strb;
-    reg d_cache_wr_buf_data_empty;
-    reg [D_BANK_NUM_WIDTH-1:0] d_cache_wr_buf_data_ptr;
+    axi_wr #
+        (
+            .D_BYTES_PER_LINE(D_BYTES_PER_LINE),
+            .D_WORDS_PER_LINE(D_WORDS_PER_LINE)
+        )
+        axi_wr
+        (
 
-    wire d_cache_wr_buf_data_last = d_cache_wr_buf_burst ? &d_cache_wr_buf_data_ptr : 1'b1;
+            .clk    (clk),
+            .reset  (reset),
+            .wr_idle(wr_idle),
 
-    wire d_cache_wr_buf_data_finish = d_cache_wr_buf_data_last & wready & wvalid;
-    assign d_cache_wr_buf_data_accept = (d_cache_wr_buf_data_empty | d_cache_wr_buf_data_finish);
+            // d cache
+            .wr_req (d_cache_wr_req),
+            .wr_rdy (d_cache_wr_rdy),
+            .burst  (d_cache_burst),
+            .data   (d_cache_wr_data),
+            .addr   (d_cache_wr_addr),
+            .size   (d_cache_wr_size),
+            .strb   (d_cache_wr_strb),
 
-    always @(posedge clk) begin
-        if (reset) begin
-            d_cache_wr_buf_data_empty <= 1;
-        end else begin
-            if (d_cache_wr_rdy) begin
-                d_cache_wr_buf_data_empty <= 0;
-            end else if (d_cache_wr_buf_data_finish) begin
-                d_cache_wr_buf_data_empty <= 1;
-            end
-        end
-    end
+            // ar r
+            .read_unfinish(|{i_arvalid_reg, d_arvalid_reg, waiting_for_rvalid}),
 
-    always @(posedge clk) begin
-        if (d_cache_wr_rdy) begin
-            d_cache_wr_buf_data_ptr <= 0;
-            d_cache_wr_buf_data <= d_cache_wr_data;
-            d_cache_wr_buf_addr <= d_cache_wr_addr;
-            d_cache_wr_buf_burst <= d_cache_burst;
-            d_cache_wr_buf_strb <= d_cache_wr_strb;
-            d_cache_wr_buf_size <= d_cache_wr_size;
-        end else begin
-            if (wready)
-                d_cache_wr_buf_data_ptr <= d_cache_wr_buf_data_ptr + 1;
-        end
-    end
+            // aw
+            .awid   (awid),
+            .awaddr (awaddr),
+            .awlen  (awlen),
+            .awsize (awsize),
+            .awburst(awburst),
+            .awlock (awlock),
+            .awcache(awcache),
+            .awprot (awprot),
+            .awvalid(awvalid),
+            .awready(awready),
 
-    wire d_cache_wr_now = (~waiting_for_bvalid | bvalid) & d_cache_wr_req;
-    assign d_cache_wr_rdy = d_cache_wr_now & d_cache_wr_buf_data_accept;
+            // w
+            .wid    (wid),
+            .wdata  (wdata),
+            .wstrb  (wstrb),
+            .wlast  (wlast),
+            .wvalid (wvalid),
+            .wready (wready),
 
-    reg waiting_for_awready;
-    assign awvalid = waiting_for_awready;
-    always @(posedge clk) begin
-        if (reset)
-            waiting_for_awready <= 0;
-        else begin
-            if (d_cache_wr_rdy)
-                waiting_for_awready <= 1;
-            else if (awready)
-                waiting_for_awready <= 0;
-        end
-    end
-
-    always @(posedge clk) begin
-        if (reset)
-            waiting_for_bvalid <= 0;
-        else begin
-            if (awready & awvalid)
-                waiting_for_bvalid <= 1;
-            else if (bvalid)
-                waiting_for_bvalid <= 0;
-        end
-    end
-
-    mux_1h
-        #(.num_port(2), .data_width(32 + 3 + 2 + 8)) wr_mux (
-            .select(
-                {
-                    d_cache_wr_buf_burst,
-                    ~d_cache_wr_buf_burst
-                }),
-            .in(
-                {
-                    {d_cache_wr_buf_addr, 3'b011, BURST_INCR, D_AXI_LEN},
-                    {d_cache_wr_buf_addr, {1'b0, d_cache_wr_buf_size}, BURST_FIXED, 8'b0}
-                }
-            ),
-            .out({awaddr, awsize, awburst, awlen})
+            // b
+            // verilator lint_off UNUSED
+            .bid    (bid),
+            .bresp  (bresp),
+            // verilator lint_on UNUSED
+            .bvalid (bvalid),
+            .bready (bready)
         );
-    assign wdata = d_cache_wr_buf_data[d_cache_wr_buf_data_ptr * 32 +: 32];
-    assign wstrb = d_cache_wr_buf_strb;
-    assign wlast = d_cache_wr_buf_data_last;
-    assign wvalid = ~d_cache_wr_buf_data_empty;
-
-    assign awid = 0;
-    assign awlock = 0;
-    assign awcache = 0;
-    assign awprot = 0;
-    assign wid = 0;
-
-    assign bready = 1;
 endmodule

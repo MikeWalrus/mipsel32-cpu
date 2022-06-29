@@ -1,4 +1,18 @@
-module mycpu_top(
+module mycpu_top #
+    (
+        //
+        // These parameters are the source of truth.
+        //
+        parameter I_NUM_WAY = 2,
+        // BYTES_PER_LINE * NUM_LINE must <= 4096
+        parameter I_BYTES_PER_LINE = 16,
+        parameter I_NUM_LINE = 256,
+        parameter D_NUM_WAY = 2,
+        // BYTES_PER_LINE * NUM_LINE must <= 4096
+        parameter D_BYTES_PER_LINE = 16,
+        parameter D_NUM_LINE = 256
+    )
+    (
         input aclk,
         input aresetn,
 
@@ -48,7 +62,7 @@ module mycpu_top(
     );
     //cpu inst sram
     wire        cpu_inst_req;
-    wire        cpu_inst_cached; 
+    wire        cpu_inst_cached;
     wire        cpu_inst_wr;
     wire [1 :0] cpu_inst_size;
     wire [3 :0] cpu_inst_wstrb;
@@ -72,7 +86,16 @@ module mycpu_top(
 
     //debug signals
 
-    cpu_sram cpu_sram(
+    cpu_sram # (
+                 .I_NUM_WAY(I_NUM_WAY),
+                 .I_BYTES_PER_LINE(I_BYTES_PER_LINE),
+                 .I_NUM_LINE(I_NUM_LINE),
+                 .D_NUM_WAY(D_NUM_WAY),
+                 .D_BYTES_PER_LINE(D_BYTES_PER_LINE),
+                 .D_NUM_LINE(D_NUM_LINE)
+             )
+             cpu_sram
+             (
                  .clk              (aclk   ),
                  .resetn           (aresetn),  //low active
 
@@ -107,7 +130,15 @@ module mycpu_top(
                  .debug_wb_rf_wdata(debug_wb_rf_wdata)
              );
 
-    sram_to_axi
+    sram_to_axi #
+        (
+            .I_NUM_WAY(I_NUM_WAY),
+            .I_BYTES_PER_LINE(I_BYTES_PER_LINE),
+            .I_NUM_LINE(I_NUM_LINE),
+            .D_NUM_WAY(D_NUM_WAY),
+            .D_BYTES_PER_LINE(D_BYTES_PER_LINE),
+            .D_NUM_LINE(D_NUM_LINE)
+        )
         sram_to_axi(
             .clk(aclk),
             .reset(~aresetn),

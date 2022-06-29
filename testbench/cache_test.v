@@ -7,7 +7,7 @@
 module testbench #
 (
         parameter NUM_WAY = 2,
-        parameter BYTES_PER_LINE = 64,
+        parameter BYTES_PER_LINE = 16,
         parameter NUM_LINE = 256 // must <= 256 if VIPT
 )
 ();
