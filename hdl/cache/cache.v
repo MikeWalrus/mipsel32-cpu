@@ -207,8 +207,8 @@ module cache #
             write_buf_idle <= write_buf_idle_next;
     end
 
-    // write buffer hazard
-    wire write_overlap = write & hit_write & (req_buf_bank_num == bank_num);
+    // read after write hazard
+    wire write_overlap = ~write_buf_idle & (write_buf_bank_num == bank_num);
     wire [3:0] forword_byte_from_write_buffer =
          {4{hit & ~write_buf_idle
             & (write_buf_index == req_buf_index)
@@ -433,8 +433,8 @@ module cache #
          && ret_valid && ret_last;
     assign data_ok = refill_data_ok_cached | refill_data_ok_uncached | lookup_data_ok;
     mux_1h #(.num_port(3), .data_width(32)) rdata_mux(
-               .select({lookup_data_ok, refill_data_ok_cached, replace_buf_uncached}),
-               .in(    {lookup_rdata  , refill_word          , ret_data            }),
+               .select({lookup_data_ok, refill_data_ok_cached, refill_data_ok_uncached}),
+               .in(    {lookup_rdata  , refill_word          , ret_data               }),
                .out(rdata)
            );
 
