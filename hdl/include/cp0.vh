@@ -31,3 +31,6 @@
 
 `define ERET 5'h1f
 `define REFETCH 5'h1e
+
+`define CACHED 3'h3
+`define UNCACHED 3'h2

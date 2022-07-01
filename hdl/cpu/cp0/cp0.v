@@ -14,7 +14,9 @@ module cp0 #
         parameter D_NUM_WAY = 2,
         // BYTES_PER_LINE * NUM_LINE must <= 4096
         parameter D_BYTES_PER_LINE = 16,
-        parameter D_NUM_LINE = 256
+        parameter D_NUM_LINE = 256,
+
+        parameter CONFIG_K0 = `CACHED
     )
     (
         input clk,
@@ -89,7 +91,7 @@ module cp0 #
     // reg [2:0] config_k0;
     always @(posedge clk) begin
         if (reset)
-            config_k0 <= 3'h2;
+            config_k0 <= CONFIG_K0;
         else if (reg_num == `CONFIG && sel == 0) begin
             if (wen)
                 config_k0 <= reg_in[2:0];
