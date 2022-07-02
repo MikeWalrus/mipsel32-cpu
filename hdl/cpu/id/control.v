@@ -69,7 +69,13 @@ module control(
         output eret,
         output tlbp,
         output tlbwi,
-        output tlbr
+        output tlbr,
+
+        output cacheop_i,
+        output cacheop_d,
+        output cacheop_hit,
+        output cacheop_index,
+        output cacheop_wb
     );
     wire is_R_type = opcode == 6'b000000;
     wire imm_arith;
@@ -77,6 +83,7 @@ module control(
     wire is_addi   = opcode == 6'b001000;
     wire is_addiu  = opcode == 6'b001001;
     wire is_andi   = opcode == 6'b001100;
+    wire is_cache  = opcode == 6'b101111;
     wire is_j      = opcode == 6'b000010;
     wire is_jal    = opcode == 6'b000011;
     wire is_lb     = opcode == 6'b100000;
@@ -140,6 +147,23 @@ module control(
     assign tlbp =  cp0 & co & (func == 6'b001000);
     assign tlbwi = cp0 & co & (func == 6'b000010);
     assign tlbr =  cp0 & co & (func == 6'b000001);
+
+    // cache operation
+    assign cacheop_i = is_cache & rt[1:0] == 2'b00;
+    assign cacheop_d = is_cache & rt[1:0] == 2'b01;
+    assign cacheop_index = |{
+               rt == 5'b00000,
+               rt == 5'b00001
+           };
+    assign cacheop_hit = |{
+               rt == 5'b10000,
+               rt == 5'b10001,
+               rt == 5'b10101
+           };
+    assign cacheop_wb = |{
+               rt == 5'b00001,
+               rt == 5'b10101
+           };
 
     wire branch_link;
     wire link = is_jal | branch_link | (is_R_type & func_jalr);
@@ -286,7 +310,8 @@ module control(
                cp0,
                is_mul,
                alu_op_clo,
-               alu_op_clz
+               alu_op_clz,
+               is_cache
            };
 
     assign exc_break = is_R_type & func_break;

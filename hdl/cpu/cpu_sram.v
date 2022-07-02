@@ -33,6 +33,14 @@ module cpu_sram #
         input inst_sram_data_ok,
         input [31:0] inst_sram_rdata,
 
+        output inst_cacheop,
+        output inst_cacheop_index,
+        output inst_cacheop_hit,
+        output inst_cacheop_wb,
+        output [31:0] inst_cacheop_addr,
+        input inst_cacheop_ok1,
+        input inst_cacheop_ok2,
+
         (* MARK_DEBUG = "TRUE" *)output data_sram_req,
         (* MARK_DEBUG = "TRUE" *)output data_sram_cached,
         output data_sram_wr,
@@ -43,6 +51,14 @@ module cpu_sram #
         input data_sram_addr_ok,
         input data_sram_data_ok,
         input [31:0] data_sram_rdata,
+
+        output data_cacheop,
+        output data_cacheop_index,
+        output data_cacheop_hit,
+        output data_cacheop_wb,
+        output [31:0] data_cacheop_addr,
+        input data_cacheop_ok1,
+        input data_cacheop_ok2,
 
         output [31:0] debug_wb_pc,
         (* MARK_DEBUG = "TRUE" *)output [3:0] debug_wb_rf_wen,
@@ -57,6 +73,8 @@ module cpu_sram #
     wire mem_wen_ID;
     wire mem_wen_EX;
     wire data_sram_req_MEM;
+    wire inst_cacheop_MEM;
+    wire data_cacheop_MEM;
 
     // pc
     (* MARK_DEBUG = "TRUE" *)wire [31:0] curr_pc_pre_IF;
@@ -283,6 +301,33 @@ module cpu_sram #
             mem_wr_MEM
         } = mem_ctrl_MEM;
 
+
+    // cacheop
+    wire cacheop_i_ID;
+    wire cacheop_d_ID;
+    wire cacheop_index_ID;
+    wire cacheop_hit_ID;
+    wire cacheop_wb_ID;
+    wire [4:0] cacheop_ID = {
+             cacheop_i_ID,
+             cacheop_d_ID,
+             cacheop_index_ID,
+             cacheop_hit_ID,
+             cacheop_wb_ID
+         };
+    wire cacheop_i_EX;
+    wire cacheop_d_EX;
+    wire cacheop_index_EX;
+    wire cacheop_hit_EX;
+    wire cacheop_wb_EX;
+    wire [4:0] cacheop_EX;
+    assign {
+            cacheop_i_EX,
+            cacheop_d_EX,
+            cacheop_index_EX,
+            cacheop_hit_EX,
+            cacheop_wb_EX
+        } = cacheop_EX;
 
     // register write
     wire reg_write_ID;
@@ -652,7 +697,8 @@ module cpu_sram #
                           32 + 1 + 1 +
                           1 + 1 + 1 +
                           1 +
-                          19
+                          19 +
+                          5
                          ))
                  ID_EX_reg(
                      .clk(clk),
@@ -673,7 +719,8 @@ module cpu_sram #
                              badvaddr_ID, mem_en_ID, mem_wen_ID,
                              tlbp_ID, tlbwi_ID, tlbr_ID,
                              tlb_refill_ID,
-                             tlb_error_vpn2_ID
+                             tlb_error_vpn2_ID,
+                             cacheop_ID
                          }),
                      .out(
                          {
@@ -684,7 +731,8 @@ module cpu_sram #
                              badvaddr_EX_old, mem_en_EX, mem_wen_EX,
                              tlbp_EX, tlbwi_EX, tlbr_EX,
                              tlb_refill_EX_old,
-                             tlb_error_vpn2_EX_old
+                             tlb_error_vpn2_EX_old,
+                             cacheop_EX
                          }),
                      .valid(ID_EX_reg_valid)
                  );
@@ -695,7 +743,7 @@ module cpu_sram #
                           9 +
                           1 + 5 +
                           32 +
-                          1 +
+                          3 +
                           TLBNUM_WIDTH+1 +
                           1 + 1 + 1 +
                           1 +
@@ -718,7 +766,7 @@ module cpu_sram #
                              cp0_signals_EX,
                              exception_EX, exccode_EX,
                              badvaddr_EX,
-                             data_sram_req,
+                             data_sram_req, data_cacheop, inst_cacheop,
                              tlbp_result_EX,
                              tlbp_EX, tlbwi_EX, tlbr_EX,
                              tlb_refill_EX,
@@ -732,7 +780,7 @@ module cpu_sram #
                              cp0_signals_MEM,
                              exception_MEM_old, exccode_MEM_old,
                              badvaddr_MEM,
-                             data_sram_req_MEM,
+                             data_sram_req_MEM, data_cacheop_MEM, inst_cacheop_MEM,
                              tlbp_result_MEM,
                              tlbp_MEM, tlbwi_MEM, tlbr_MEM,
                              tlb_refill_MEM,
@@ -1017,19 +1065,20 @@ module cpu_sram #
 
     assign badvaddr_IF = curr_pc_IF;
 
-    exception_combine refetch_as_exception(
-                          .exception_h(exception_IF_old),
-                          .exccode_h(exccode_IF_old),
-                          .exception_l(
-                              |{mtc0_ID, tlbwi_ID, tlbr_ID} & IF_ID_reg_valid
-                              | |{mtc0_EX, tlbwi_EX, tlbr_EX} & ID_EX_reg_valid
-                              | |{mtc0_MEM, tlbwi_MEM, tlbr_MEM} & EX_MEM_reg_valid
-                              | |{mtc0_WB, tlbwi_WB, tlbr_WB} & MEM_WB_reg_valid
-                          ),
-                          .exccode_l(`REFETCH),
-                          .exception_out(exception_IF),
-                          .exccode_out(exccode_IF)
-                      );
+    exception_combine
+        refetch_as_exception(
+            .exception_h(exception_IF_old),
+            .exccode_h(exccode_IF_old),
+            .exception_l(
+                |{cacheop_i_ID, mtc0_ID, tlbwi_ID, tlbr_ID} & IF_ID_reg_valid
+                | |{cacheop_i_EX, mtc0_EX, tlbwi_EX, tlbr_EX} & ID_EX_reg_valid
+                | |{mtc0_MEM, tlbwi_MEM, tlbr_MEM} & EX_MEM_reg_valid
+                | |{mtc0_WB, tlbwi_WB, tlbr_WB} & MEM_WB_reg_valid
+            ),
+            .exccode_l(`REFETCH),
+            .exception_out(exception_IF),
+            .exccode_out(exccode_IF)
+        );
 
 
     //
@@ -1112,7 +1161,13 @@ module cpu_sram #
                 .eret(eret_ID),
                 .tlbp(tlbp_ID),
                 .tlbwi(tlbwi_ID),
-                .tlbr(tlbr_ID)
+                .tlbr(tlbr_ID),
+
+                .cacheop_i(cacheop_i_ID),
+                .cacheop_d(cacheop_d_ID),
+                .cacheop_hit(cacheop_hit_ID),
+                .cacheop_index(cacheop_index_ID),
+                .cacheop_wb(cacheop_wb_ID)
             );
 
     always @(posedge clk) begin
@@ -1361,53 +1416,75 @@ module cpu_sram #
     wire tlb_refill_d;
     wire tlb_error_d;
     wire tlb_mod;
-    data_sram_request #(.TLB(TLB)) data_sram_request(
-                          .data_sram_req(data_sram_req),
-                          .data_sram_cached(data_sram_cached),
-                          .data_sram_wr(data_sram_wr),
-                          .data_sram_size(data_sram_size),
-                          .data_sram_wstrb(data_sram_wstrb),
-                          .data_sram_addr(data_sram_addr),
-                          .data_sram_wdata(data_sram_wdata),
-                          .data_sram_addr_ok(data_sram_addr_ok),
+    data_sram_request #
+        (.TLB(TLB))
+        data_sram_request(
+            .data_sram_req(data_sram_req),
+            .data_sram_cached(data_sram_cached),
+            .data_sram_wr(data_sram_wr),
+            .data_sram_size(data_sram_size),
+            .data_sram_wstrb(data_sram_wstrb),
+            .data_sram_addr(data_sram_addr),
+            .data_sram_wdata(data_sram_wdata),
+            .data_sram_addr_ok(data_sram_addr_ok),
 
-                          .mem_ren_EX(mem_en_EX),
-                          .mem_wen_EX(mem_wen_EX),
+            .inst_cacheop(inst_cacheop),
+            .inst_cacheop_index(inst_cacheop_index),
+            .inst_cacheop_hit(inst_cacheop_hit),
+            .inst_cacheop_wb(inst_cacheop_wb),
+            .inst_cacheop_addr(inst_cacheop_addr),
+            .inst_cacheop_ok1(inst_cacheop_ok1),
 
-                          .data(rt_data_EX),
-                          .virt_addr(alu_address_out),
+            .data_cacheop(data_cacheop),
+            .data_cacheop_index(data_cacheop_index),
+            .data_cacheop_hit(data_cacheop_hit),
+            .data_cacheop_wb(data_cacheop_wb),
+            .data_cacheop_addr(data_cacheop_addr),
+            .data_cacheop_ok1(data_cacheop_ok1),
 
-                          .ID_EX_reg_valid(ID_EX_reg_valid),
-                          .ID_EX_reg_allow_out(ID_EX_reg_allow_out),
-                          .exception_EX_MEM_WB(exception_EX_MEM_WB),
-                          .mem_w_EX(mem_w_EX),
-                          .mem_h_EX(mem_h_EX),
-                          .mem_b_EX(mem_b_EX),
-                          .mem_hu_EX(mem_hu_EX),
-                          .mem_bu_EX(mem_bu_EX),
-                          .mem_wl_EX(mem_wl_EX),
-                          .mem_wr_EX(mem_wr_EX),
+            .mem_ren_EX(mem_en_EX),
+            .mem_wen_EX(mem_wen_EX),
 
-                          .mem_addr_unaligned(mem_addr_unaligned),
-                          .ID_EX_reg_stall_mem_not_ready(
-                              ID_EX_reg_stall_mem_not_ready
-                          ),
-                          .byte_offset_EX(byte_offset_EX),
+            .data(rt_data_EX),
+            .virt_addr(alu_address_out),
 
-                          .vpn2(s1_vpn2_req),
-                          .odd_page(s1_odd_page),
-                          .pfn(s1_pfn),
-                          .found(s1_found),
-                          .v(s1_v),
-                          .d(s1_d),
-                          .c(s1_c),
+            .ID_EX_reg_valid(ID_EX_reg_valid),
+            .ID_EX_reg_allow_out(ID_EX_reg_allow_out),
+            .exception_EX_MEM_WB(exception_EX_MEM_WB),
+            .mem_w_EX(mem_w_EX),
+            .mem_h_EX(mem_h_EX),
+            .mem_b_EX(mem_b_EX),
+            .mem_hu_EX(mem_hu_EX),
+            .mem_bu_EX(mem_bu_EX),
+            .mem_wl_EX(mem_wl_EX),
+            .mem_wr_EX(mem_wr_EX),
 
-                          .tlb_refill(tlb_refill_d),
-                          .tlb_error(tlb_error_d),
-                          .tlb_mod(tlb_mod),
+            .mem_addr_unaligned(mem_addr_unaligned),
+            .ID_EX_reg_stall_mem_not_ready(
+                ID_EX_reg_stall_mem_not_ready
+            ),
+            .byte_offset_EX(byte_offset_EX),
 
-                          .cp0_config_k0(cp0_config_k0)
-                      );
+            .vpn2(s1_vpn2_req),
+            .odd_page(s1_odd_page),
+            .pfn(s1_pfn),
+            .found(s1_found),
+            .v(s1_v),
+            .d(s1_d),
+            .c(s1_c),
+
+            .tlb_refill(tlb_refill_d),
+            .tlb_error(tlb_error_d),
+            .tlb_mod(tlb_mod),
+
+            .cacheop_i(cacheop_i_EX),
+            .cacheop_d(cacheop_d_EX),
+            .cacheop_index(cacheop_index_EX),
+            .cacheop_hit(cacheop_hit_EX),
+            .cacheop_wb(cacheop_wb_EX),
+
+            .cp0_config_k0(cp0_config_k0)
+        );
     assign s1_vpn2 = tlbp_EX ? cp0_entry_hi_vpn2 : s1_vpn2_req;
     assign tlbp_result_EX = {~s1_found, s1_index};
 
@@ -1444,7 +1521,12 @@ module cpu_sram #
     //
 
     assign EX_MEM_reg_stall_wait_for_data =
-           data_sram_req_MEM & EX_MEM_reg_valid & ~data_sram_data_ok;
+           EX_MEM_reg_valid &
+           |{
+               (data_sram_req_MEM & ~data_sram_data_ok),
+               (data_cacheop_MEM & ~data_cacheop_ok2),
+               (inst_cacheop_MEM & ~inst_cacheop_ok2)
+           };
 
     mem_read mem_read(
                  .data_sram_rdata(data_sram_rdata),

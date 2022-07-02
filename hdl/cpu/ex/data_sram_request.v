@@ -12,6 +12,20 @@ module data_sram_request #
         output [31:0] data_sram_wdata,
         input data_sram_addr_ok,
 
+        output inst_cacheop,
+        output inst_cacheop_index,
+        output inst_cacheop_hit,
+        output inst_cacheop_wb,
+        output [31:0] inst_cacheop_addr,
+        input inst_cacheop_ok1,
+
+        output data_cacheop,
+        output data_cacheop_index,
+        output data_cacheop_hit,
+        output data_cacheop_wb,
+        output [31:0] data_cacheop_addr,
+        input data_cacheop_ok1,
+
         input mem_ren_EX,
         input mem_wen_EX,
 
@@ -42,19 +56,39 @@ module data_sram_request #
         input d,
         input [2:0] c,
 
+        input cacheop_i,
+        input cacheop_d,
+        input cacheop_index,
+        input cacheop_hit,
+        input cacheop_wb,
+
         input [2:0] cp0_config_k0,
 
         output tlb_refill,
         output tlb_error,
         output tlb_mod
     );
-    assign data_sram_req =
-           (ID_EX_reg_valid
-            & (mem_ren_EX | mem_wen_EX)
-            // avoid sending multiple requests when stalling:
-            & ID_EX_reg_allow_out
-            // avoid sending request when exceptions have happened:
-            & ~exception_EX_MEM_WB) ? 1 : 0;
+    wire [31:0] phy_addr;
+    assign data_sram_addr = phy_addr;
+
+    wire req =
+         (ID_EX_reg_valid
+          // avoid sending multiple requests when stalling:
+          & ID_EX_reg_allow_out
+          // avoid sending request when exceptions have happened:
+          & ~exception_EX_MEM_WB) ? 1 : 0;
+    assign data_sram_req = req & (mem_ren_EX | mem_wen_EX);
+    assign inst_cacheop = req & cacheop_i;
+    assign data_cacheop = req & cacheop_d;
+
+    assign inst_cacheop_hit = cacheop_hit;
+    assign inst_cacheop_index = cacheop_index;
+    assign inst_cacheop_wb = cacheop_wb;
+    assign inst_cacheop_addr = phy_addr;
+    assign data_cacheop_hit = cacheop_hit;
+    assign data_cacheop_index = cacheop_index;
+    assign data_cacheop_wb = cacheop_wb;
+    assign data_cacheop_addr = phy_addr;
 
     reg [2:0] wstrb_count;
     integer i;
@@ -125,7 +159,7 @@ module data_sram_request #
     wire virt_mapped;
     addr_trans #(.TLB(TLB)) addr_trans_data(
                    .virt_addr(virt_addr),
-                   .phy_addr(data_sram_addr),
+                   .phy_addr(phy_addr),
                    .tlb_mapped(virt_mapped),
                    .cached(data_sram_cached),
 
@@ -142,5 +176,9 @@ module data_sram_request #
     assign byte_offset_EX = data_sram_addr[1:0];
 
     assign ID_EX_reg_stall_mem_not_ready =
-           ~data_sram_addr_ok & data_sram_req;
+           |{
+               ~data_sram_addr_ok & data_sram_req,
+               ~inst_cacheop_ok1 & inst_cacheop,
+               ~data_cacheop_ok1 & data_cacheop
+           };
 endmodule

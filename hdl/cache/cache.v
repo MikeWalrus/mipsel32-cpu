@@ -16,10 +16,8 @@ module cache #
         input valid,
         input write,
         input uncached,
+        input [31:0] addr,
         input [1:0] size,
-        input [INDEX_WIDTH-1:0] index,
-        input [TAG_WIDTH-1:0] tag,
-        input [OFFSET_WIDTH-1:0] offset,
         input [3:0] wstrb,
         input [31:0] wdata,
 
@@ -41,8 +39,34 @@ module cache #
         output [3:0] wr_strb,
         output [1:0] wr_size,
         output [BYTES_PER_LINE*8-1:0] wr_data,
-        input wr_rdy
+        input wr_rdy,
+
+        input cacheop,
+        input cacheop_index,
+        input cacheop_hit,
+        input cacheop_wb,
+        input [31:0] cacheop_addr,
+        output cacheop_ok1, // similar to addr_ok
+        output cacheop_ok2  // similar to data_ok
     );
+    assign cacheop_ok1 = 0;
+    assign cacheop_ok2 = 0;
+
+    wire [INDEX_WIDTH-1:0] index;
+    wire [TAG_WIDTH-1:0] tag;
+    wire [OFFSET_WIDTH-1:0] offset;
+    addr_parse #
+        (
+            .BYTES_PER_LINE(BYTES_PER_LINE),
+            .NUM_LINE(NUM_LINE)
+        )
+        addr_parse(
+            .addr(addr),
+            .index(index),
+            .tag(tag),
+            .offset(offset)
+        );
+
     function [BANK_NUM_WIDTH-1:0] get_bank_num(
             // verilator lint_off UNUSED
             input [OFFSET_WIDTH-1:0] byte_offset
@@ -446,6 +470,6 @@ module cache #
                replace_buf_uncached ?  replace_buf_offset : {OFFSET_WIDTH{1'b0}}
            };
     assign rd_size = replace_buf_size;
-    assign wr_req = first_cycle_of_REPLACE; // TODO: ???
+    assign wr_req = first_cycle_of_REPLACE;
     assign wr_size = replace_buf_size;
 endmodule

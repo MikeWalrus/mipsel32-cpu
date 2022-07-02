@@ -72,6 +72,14 @@ module mycpu_top #
     wire        cpu_inst_data_ok;
     wire [31:0] cpu_inst_rdata;
 
+    wire cpu_inst_cacheop;
+    wire cpu_inst_cacheop_index;
+    wire cpu_inst_cacheop_hit;
+    wire cpu_inst_cacheop_wb;
+    wire [31:0] cpu_inst_cacheop_addr;
+    wire cpu_inst_cacheop_ok1;
+    wire cpu_inst_cacheop_ok2;
+
     //cpu data sram
     wire        cpu_data_req;
     wire        cpu_data_cached;
@@ -83,6 +91,14 @@ module mycpu_top #
     wire        cpu_data_addr_ok;
     wire        cpu_data_data_ok;
     wire [31:0] cpu_data_rdata;
+
+    wire cpu_data_cacheop;
+    wire cpu_data_cacheop_index;
+    wire cpu_data_cacheop_hit;
+    wire cpu_data_cacheop_wb;
+    wire [31:0] cpu_data_cacheop_addr;
+    wire cpu_data_cacheop_ok1;
+    wire cpu_data_cacheop_ok2;
 
     //debug signals
 
@@ -111,6 +127,13 @@ module mycpu_top #
                  .inst_sram_addr_ok(cpu_inst_addr_ok),
                  .inst_sram_data_ok(cpu_inst_data_ok),
                  .inst_sram_rdata  (cpu_inst_rdata  ),
+                 .inst_cacheop     (cpu_inst_cacheop),
+                 .inst_cacheop_index(cpu_inst_cacheop_index),
+                 .inst_cacheop_hit (cpu_inst_cacheop_hit),
+                 .inst_cacheop_wb  (cpu_inst_cacheop_wb),
+                 .inst_cacheop_addr(cpu_inst_cacheop_addr),
+                 .inst_cacheop_ok1 (cpu_inst_cacheop_ok1),
+                 .inst_cacheop_ok2 (cpu_inst_cacheop_ok2),
 
                  .data_sram_req    (cpu_data_req    ),
                  .data_sram_cached (cpu_data_cached ),
@@ -122,6 +145,13 @@ module mycpu_top #
                  .data_sram_addr_ok(cpu_data_addr_ok),
                  .data_sram_data_ok(cpu_data_data_ok),
                  .data_sram_rdata  (cpu_data_rdata  ),
+                 .data_cacheop     (cpu_data_cacheop),
+                 .data_cacheop_index(cpu_data_cacheop_index),
+                 .data_cacheop_hit (cpu_data_cacheop_hit),
+                 .data_cacheop_wb  (cpu_data_cacheop_wb),
+                 .data_cacheop_addr(cpu_data_cacheop_addr),
+                 .data_cacheop_ok1 (cpu_data_cacheop_ok1),
+                 .data_cacheop_ok2 (cpu_data_cacheop_ok2),
 
                  //debug interface
                  .debug_wb_pc      (debug_wb_pc      ),
@@ -153,6 +183,14 @@ module mycpu_top #
             .i_addr_ok(cpu_inst_addr_ok),
             .i_data_ok(cpu_inst_data_ok),
             .i_rdata  (cpu_inst_rdata  ),
+            .i_cacheop     (cpu_inst_cacheop),
+            .i_cacheop_index(cpu_inst_cacheop_index),
+            .i_cacheop_hit (cpu_inst_cacheop_hit),
+            .i_cacheop_wb  (cpu_inst_cacheop_wb),
+            .i_cacheop_addr(cpu_inst_cacheop_addr),
+            .i_cacheop_ok1 (cpu_inst_cacheop_ok1),
+            .i_cacheop_ok2 (cpu_inst_cacheop_ok2),
+
 
             .d_req    (cpu_data_req    ),
             .d_uncached(~cpu_data_cached),
@@ -164,6 +202,13 @@ module mycpu_top #
             .d_addr_ok(cpu_data_addr_ok),
             .d_data_ok(cpu_data_data_ok),
             .d_rdata  (cpu_data_rdata  ),
+            .d_cacheop     (cpu_data_cacheop),
+            .d_cacheop_index(cpu_data_cacheop_index),
+            .d_cacheop_hit (cpu_data_cacheop_hit),
+            .d_cacheop_wb  (cpu_data_cacheop_wb),
+            .d_cacheop_addr(cpu_data_cacheop_addr),
+            .d_cacheop_ok1 (cpu_data_cacheop_ok1),
+            .d_cacheop_ok2 (cpu_data_cacheop_ok2),
 
 
             .arid(arid),

@@ -261,9 +261,7 @@ module cache_top #
             .valid  (memref_valid),
             .uncached (0),
             .write  (memref_op ),
-            .index  (in_index  ),
-            .tag    (in_tag    ),
-            .offset (in_offset ),
+            .addr   ({in_tag, in_index, in_offset}),
             .wstrb  (memref_wstrb),
             .wdata  (memref_data),
 

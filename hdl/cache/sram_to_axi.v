@@ -38,6 +38,13 @@ module sram_to_axi #
         output        i_addr_ok ,
         output        i_data_ok ,
         input         i_uncached,
+        input         i_cacheop,
+        input         i_cacheop_index,
+        input         i_cacheop_hit,
+        input         i_cacheop_wb,
+        input  [31:0] i_cacheop_addr,
+        output        i_cacheop_ok1,
+        output        i_cacheop_ok2,
 
         //data sram-like
         input         d_req     ,
@@ -50,6 +57,13 @@ module sram_to_axi #
         output        d_addr_ok ,
         output        d_data_ok ,
         input         d_uncached,
+        input         d_cacheop,
+        input         d_cacheop_index,
+        input         d_cacheop_hit,
+        input         d_cacheop_wb,
+        input  [31:0] d_cacheop_addr,
+        output        d_cacheop_ok1,
+        output        d_cacheop_ok2,
 
         //axi
         //ar
@@ -93,10 +107,8 @@ module sram_to_axi #
         output        wvalid       ,
         input         wready       ,
         //b
-        // verilator lint_off UNUSED
         input  [3 :0] bid          ,
         input  [1 :0] bresp        ,
-        // verilator lint_on UNUSED
         input         bvalid       ,
         output        bready
     );
@@ -145,9 +157,7 @@ module sram_to_axi #
             .size   (i_size),
             .write  (i_wr),
             .uncached(i_uncached),
-            .index  (i_addr[(31-I_TAG_WIDTH)-:I_INDEX_WIDTH]),
-            .tag    (i_addr[31-:I_TAG_WIDTH]),
-            .offset (i_addr[0+:I_OFFSET_WIDTH]),
+            .addr (i_addr),
             .wstrb  (i_wstrb),
             .wdata  (i_wdata),
 
@@ -169,7 +179,15 @@ module sram_to_axi #
             .wr_size    (i_cache_wr_size),
             .wr_strb    (i_cache_wr_strb),
             .wr_data    (i_cache_wr_data),
-            .wr_rdy     (i_cache_wr_rdy)
+            .wr_rdy     (i_cache_wr_rdy),
+
+            .cacheop    (i_cacheop),
+            .cacheop_addr(i_cacheop_addr),
+            .cacheop_index(i_cacheop_index),
+            .cacheop_hit(i_cacheop_hit),
+            .cacheop_wb (i_cacheop_wb),
+            .cacheop_ok1(i_cacheop_ok1),
+            .cacheop_ok2(i_cacheop_ok2)
         );
 
     wire d_cache_req = d_req;
@@ -186,7 +204,6 @@ module sram_to_axi #
     wire [31:0] d_cache_wr_addr;
     wire [1:0] d_cache_wr_size;
     wire [D_LINE_WIDTH-1:0] d_cache_wr_data;
-    wire d_cache_wr_buf_data_accept;
     wire d_cache_wr_rdy;
     wire [3:0] d_cache_wr_strb;
 
@@ -203,10 +220,8 @@ module sram_to_axi #
             .valid  (d_cache_req),
             .write  (d_wr),
             .uncached(d_uncached),
+            .addr   (d_addr),
             .size   (d_size),
-            .index  (d_addr[(31-D_TAG_WIDTH)-:D_INDEX_WIDTH]),
-            .tag    (d_addr[31-:D_TAG_WIDTH]),
-            .offset (d_addr[0+:D_OFFSET_WIDTH]),
             .wstrb  (d_wstrb),
             .wdata  (d_wdata),
 
@@ -228,11 +243,18 @@ module sram_to_axi #
             .wr_size    (d_cache_wr_size),
             .wr_strb    (d_cache_wr_strb),
             .wr_data    (d_cache_wr_data),
-            .wr_rdy     (d_cache_wr_rdy)
+            .wr_rdy     (d_cache_wr_rdy),
+
+            .cacheop    (d_cacheop),
+            .cacheop_addr(d_cacheop_addr),
+            .cacheop_index(d_cacheop_index),
+            .cacheop_hit(d_cacheop_hit),
+            .cacheop_wb (d_cacheop_wb),
+            .cacheop_ok1(d_cacheop_ok1),
+            .cacheop_ok2(d_cacheop_ok2)
         );
 
     reg waiting_for_rvalid;
-    reg waiting_for_bvalid;
 
     assign i_addr_ok = i_cache_addr_ok;
     assign d_addr_ok = d_cache_addr_ok;
@@ -361,10 +383,8 @@ module sram_to_axi #
             .wready (wready),
 
             // b
-            // verilator lint_off UNUSED
             .bid    (bid),
             .bresp  (bresp),
-            // verilator lint_on UNUSED
             .bvalid (bvalid),
             .bready (bready)
         );
