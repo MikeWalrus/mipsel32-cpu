@@ -13,6 +13,7 @@ module cache_table #
     )
     (
         input clk,
+        input reset,
 
         input [TAG_WIDTH-1:0] tag, // next cycle
         input [INDEX_WIDTH-1:0] index,
@@ -69,14 +70,12 @@ module cache_table #
         reg [NUM_LINE-1:0] d;
         assign dirty_ways[i] = d[d_index];
         always @(posedge clk) begin
-            if (d_write_way[i] & write)
-                d[write_index] <= d_write;
-        end
-        // TODO: remove this after implementing cache instructions
-        integer n;
-        initial begin
-            for (n = 0; n < 2 ** INDEX_WIDTH; n = n + 1)
-                d[n] = 0;
+            if (reset) begin
+                d <= 0;
+            end else begin
+                if (d_write_way[i] & write)
+                    d[write_index] <= d_write;
+            end
         end
 
         wire [31:0] bank_out [WORDS_PER_LINE-1:0];

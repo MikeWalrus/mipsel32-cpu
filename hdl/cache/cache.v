@@ -51,9 +51,76 @@ module cache #
         output cacheop_ok1, // similar to addr_ok
         output cacheop_ok2  // similar to data_ok
     );
-    // TODO: move cache_table here
+    // cache table
     wire [(TAG_WIDTH*NUM_WAY)-1:0] read_tags;
     wire [BITS_PER_LINE*NUM_WAY-1:0] read_lines;
+    wire [NUM_WAY-1:0] hit_way;
+    wire [NUM_WAY-1:0] v_ways;
+    wire [NUM_WAY-1:0] dirty_ways;
+
+    wire [NUM_WAY-1:0] table_d_write_way;
+    wire table_d_write;
+    wire [INDEX_WIDTH-1:0] d_index;
+    wire [NUM_WAY-1:0] d_way;
+    wire dirty;
+
+    wire [31:0] table_rdata;
+    wire [INDEX_WIDTH-1:0] table_index;
+    wire [TAG_WIDTH-1:0] table_tag;
+    wire [BANK_NUM_WIDTH-1:0] table_bank_num;
+    wire [NUM_WAY-1:0] read_way;
+    wire [BITS_PER_LINE-1:0] read_line;
+    wire [TAG_WIDTH-1:0] read_tag;
+
+    wire table_write;
+    wire [INDEX_WIDTH-1:0] table_write_index;
+    wire [NUM_WAY-1:0] table_write_way;
+    wire [BANK_NUM_WIDTH-1:0] table_write_bank_num;
+    wire [31:0] table_write_data;
+    wire [3:0] table_write_strb;
+    wire [NUM_WAY-1:0] table_tag_v_write_way;
+    wire [TAG_WIDTH-1:0] table_tag_write;
+    wire table_v_write;
+
+    cache_table
+        #(
+            .NUM_WAY(NUM_WAY),
+            .BYTES_PER_LINE(BYTES_PER_LINE),
+            .NUM_LINE(NUM_LINE)
+        ) cache_table (
+            .clk(clk),
+            .reset(reset),
+
+            .tag(table_tag),
+            .index(table_index),
+            .bank_num(table_bank_num),
+            .hit_way(hit_way),
+            .v_ways(v_ways),
+            .rdata(table_rdata),
+            .read_way(read_way),
+            .read_line(read_line),
+            .read_lines(read_lines),
+            .read_tag(read_tag),
+            .read_tags(read_tags),
+
+            .write(table_write),
+            .write_way(table_write_way),
+            .write_index(table_write_index),
+            .write_bank_num(table_write_bank_num),
+            .write_data(table_write_data),
+            .write_strb(table_write_strb),
+
+            .d_write_way(table_d_write_way),
+            .d_write(table_d_write),
+            .d_way(d_way),
+            .d_index(d_index),
+            .dirty(dirty),
+            .dirty_ways(dirty_ways),
+
+            .tag_v_write_way(table_tag_v_write_way),
+            .tag_write(table_tag_write),
+            .v_write(table_v_write)
+        );
 
     wire [INDEX_WIDTH-1:0] index;
     wire [TAG_WIDTH-1:0] tag;
@@ -163,6 +230,7 @@ module cache #
     wire [NUM_WAY-1:0] wb_way;
     wire [NUM_WAY-1:0] wb_ways_next = wb_ways & ~wb_way;
     wire wb_last_way = wb_ways_next == 0;
+    wire replace_to_dirty_miss;
     always @(posedge clk) begin
         if (state == LOOKUP)
             wb_ways <= (req_buf_cacheop_hit ? hit_way : v_ways) & dirty_ways;
@@ -179,73 +247,6 @@ module cache #
             .out(wb_way)
         );
 
-    // cache table
-    wire [NUM_WAY-1:0] hit_way;
-    wire [NUM_WAY-1:0] v_ways;
-    wire [NUM_WAY-1:0] dirty_ways;
-
-    wire [NUM_WAY-1:0] table_d_write_way;
-    wire table_d_write;
-    wire [INDEX_WIDTH-1:0] d_index;
-    wire [NUM_WAY-1:0] d_way;
-    wire dirty;
-
-    wire [31:0] table_rdata;
-    wire [INDEX_WIDTH-1:0] table_index;
-    wire [TAG_WIDTH-1:0] table_tag;
-    wire [BANK_NUM_WIDTH-1:0] table_bank_num;
-    wire [NUM_WAY-1:0] read_way;
-    wire [BITS_PER_LINE-1:0] read_line;
-    wire [TAG_WIDTH-1:0] read_tag;
-
-    wire table_write;
-    wire [INDEX_WIDTH-1:0] table_write_index;
-    wire [NUM_WAY-1:0] table_write_way;
-    wire [BANK_NUM_WIDTH-1:0] table_write_bank_num;
-    wire [31:0] table_write_data;
-    wire [3:0] table_write_strb;
-    wire [NUM_WAY-1:0] table_tag_v_write_way;
-    wire [TAG_WIDTH-1:0] table_tag_write;
-    wire table_v_write;
-
-    cache_table
-        #(
-            .NUM_WAY(NUM_WAY),
-            .BYTES_PER_LINE(BYTES_PER_LINE),
-            .NUM_LINE(NUM_LINE)
-        ) cache_table (
-            .clk(clk),
-
-            .tag(table_tag),
-            .index(table_index),
-            .bank_num(table_bank_num),
-            .hit_way(hit_way),
-            .v_ways(v_ways),
-            .rdata(table_rdata),
-            .read_way(read_way),
-            .read_line(read_line),
-            .read_lines(read_lines),
-            .read_tag(read_tag),
-            .read_tags(read_tags),
-
-            .write(table_write),
-            .write_way(table_write_way),
-            .write_index(table_write_index),
-            .write_bank_num(table_write_bank_num),
-            .write_data(table_write_data),
-            .write_strb(table_write_strb),
-
-            .d_write_way(table_d_write_way),
-            .d_write(table_d_write),
-            .d_way(d_way),
-            .d_index(d_index),
-            .dirty(dirty),
-            .dirty_ways(dirty_ways),
-
-            .tag_v_write_way(table_tag_v_write_way),
-            .tag_write(table_tag_write),
-            .v_write(table_v_write)
-        );
 
     wire hit = (~req_buf_uncached | req_buf_cacheop) & |hit_way & (state == LOOKUP);
     wire _hit = (~req_buf_cacheop & hit) | (req_buf_cacheop & req_buf_cacheop_hit & ~hit);
@@ -319,9 +320,9 @@ module cache #
     wire dirty_miss_to_dirty_miss = (state == DIRTY_MISS) & ~wr_rdy;
     wire dirty_miss_to_replace    = (state == DIRTY_MISS) & wr_rdy;
     // REPLACE to ...
-    wire replace_to_replace    = (state == REPLACE) & ~replace_buf_cacheop & ~rd_rdy;
-    wire replace_to_dirty_miss = (state == REPLACE) & (replace_buf_cacheop & ~wb_last_way);
-    wire replace_to_refill     = (state == REPLACE) &
+    wire replace_to_replace      = (state == REPLACE) & ~replace_buf_cacheop & ~rd_rdy;
+    assign replace_to_dirty_miss = (state == REPLACE) & (replace_buf_cacheop & ~wb_last_way);
+    wire replace_to_refill       = (state == REPLACE) &
          (replace_buf_cacheop ?
           wb_last_way :
           (~replace_to_dirty_miss & rd_rdy & ~replace_buf_uncached));
