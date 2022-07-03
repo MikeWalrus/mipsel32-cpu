@@ -8,6 +8,7 @@ module cache_table #
         parameter INDEX_WIDTH = $clog2(NUM_LINE),
         parameter TAG_WIDTH = 32 - OFFSET_WIDTH - INDEX_WIDTH,
         parameter WORDS_PER_LINE = BYTES_PER_LINE / 4,
+        parameter BITS_PER_LINE = BYTES_PER_LINE * 8,
         parameter BANK_NUM_WIDTH = $clog2(WORDS_PER_LINE)
     )
     (
@@ -20,8 +21,10 @@ module cache_table #
         output [NUM_WAY-1:0] v_ways, // next cycle
         output [31:0] rdata,          // next cycle
         input [NUM_WAY-1:0] read_way,
-        output [BYTES_PER_LINE*8-1:0] read_line, // next cycle
+        output [BITS_PER_LINE-1:0] read_line, // next cycle
+        output [BITS_PER_LINE*NUM_WAY-1:0] read_lines, // next cycle
         output [TAG_WIDTH-1:0] read_tag, // next cycle
+        output [(TAG_WIDTH*NUM_WAY)-1:0] read_tags, // next cycle
 
         input write,
         input [NUM_WAY-1:0] write_way,
@@ -31,9 +34,9 @@ module cache_table #
         input [3:0] write_strb,
 
         input [NUM_WAY-1:0] d_write_way,
-        input [INDEX_WIDTH-1:0] d_write_index,
         input d_write,
         input [INDEX_WIDTH-1:0] d_index,
+        output  [NUM_WAY-1:0] dirty_ways,
         input [NUM_WAY-1:0] d_way,
         output dirty,
 
@@ -41,24 +44,22 @@ module cache_table #
         input [TAG_WIDTH-1:0] tag_write,
         input v_write
     );
-    wire [WORDS_PER_LINE*32*NUM_WAY-1:0] read_lines;
-    wire [(TAG_WIDTH*NUM_WAY)-1:0] read_tags;
     wire [32*NUM_WAY-1:0] word_all_ways;
-    wire [NUM_WAY-1:0] dirty_ways;
     genvar i;
     genvar j;
     for (i = 0; i < NUM_WAY; i = i + 1) begin :way
         wire [TAG_WIDTH-1:0] tag_read;
         wire v_read;
+        wire we = tag_v_write_way[i] & write;
         bram #(
                  .DEPTH(NUM_LINE),
                  .WIDTH(TAG_WIDTH + 1)
              ) tag_v (
-                 .addr(index),
+                 .addr(we ? write_index : index),
                  .clk(clk),
                  .din({tag_write, v_write}),
                  .dout({tag_read, v_read}),
-                 .we(tag_v_write_way[i])
+                 .we(we)
              );
 
         assign read_tags[i*TAG_WIDTH +: TAG_WIDTH] = tag_read;
@@ -68,8 +69,8 @@ module cache_table #
         reg [NUM_LINE-1:0] d;
         assign dirty_ways[i] = d[d_index];
         always @(posedge clk) begin
-            if (d_write_way[i])
-                d[d_write_index] <= d_write;
+            if (d_write_way[i] & write)
+                d[write_index] <= d_write;
         end
         // TODO: remove this after implementing cache instructions
         integer n;
@@ -93,7 +94,7 @@ module cache_table #
                      .din(write_data),
                      .we({4{bank_we}} & write_strb)
                  );
-            assign read_lines[i*WORDS_PER_LINE*32 + j*32 +: 32] = bank_out[j];
+            assign read_lines[i*BITS_PER_LINE + j*32 +: 32] = bank_out[j];
         end
     end
 

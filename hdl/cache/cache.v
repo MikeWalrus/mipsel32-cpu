@@ -4,10 +4,12 @@ module cache #
         parameter BYTES_PER_LINE = 16,
         parameter NUM_LINE = 256,
 
+        parameter NUM_WAY_WIDTH = $clog2(NUM_WAY),
         parameter OFFSET_WIDTH = $clog2(BYTES_PER_LINE),
         parameter INDEX_WIDTH = $clog2(NUM_LINE),
         parameter TAG_WIDTH = 32 - OFFSET_WIDTH - INDEX_WIDTH,
         parameter WORDS_PER_LINE = BYTES_PER_LINE / 4,
+        parameter BITS_PER_LINE = BYTES_PER_LINE * 8,
         parameter BANK_NUM_WIDTH = $clog2(WORDS_PER_LINE)
     )
     (
@@ -38,7 +40,7 @@ module cache #
         output [31:0] wr_addr,
         output [3:0] wr_strb,
         output [1:0] wr_size,
-        output [BYTES_PER_LINE*8-1:0] wr_data,
+        output [BITS_PER_LINE-1:0] wr_data,
         input wr_rdy,
 
         input cacheop,
@@ -49,8 +51,9 @@ module cache #
         output cacheop_ok1, // similar to addr_ok
         output cacheop_ok2  // similar to data_ok
     );
-    assign cacheop_ok1 = 0;
-    assign cacheop_ok2 = 0;
+    // TODO: move cache_table here
+    wire [(TAG_WIDTH*NUM_WAY)-1:0] read_tags;
+    wire [BITS_PER_LINE*NUM_WAY-1:0] read_lines;
 
     wire [INDEX_WIDTH-1:0] index;
     wire [TAG_WIDTH-1:0] tag;
@@ -61,7 +64,7 @@ module cache #
             .NUM_LINE(NUM_LINE)
         )
         addr_parse(
-            .addr(addr),
+            .addr(cacheop ? cacheop_addr : addr),
             .index(index),
             .tag(tag),
             .offset(offset)
@@ -99,21 +102,32 @@ module cache #
     reg [1:0] req_buf_size;
     reg [31:0] req_buf_wdata;
     reg req_buf_uncached;
+    reg req_buf_cacheop;
+    reg req_buf_cacheop_index;
+    reg req_buf_cacheop_hit;
+    reg req_buf_cacheop_wb;
     always @(posedge clk) begin
-        req_buf_index <= index;
-        req_buf_tag <= tag;
-        req_buf_offset <= offset;
-        req_buf_write <= write;
-        req_buf_wstrb <= wstrb;
-        req_buf_size <= size;
-        req_buf_wdata <= wdata;
-        req_buf_uncached <= uncached;
+        if (state_next == LOOKUP) begin
+            req_buf_index <= index;
+            req_buf_tag <= tag;
+            req_buf_offset <= offset;
+            req_buf_write <= write;
+            req_buf_wstrb <= wstrb;
+            req_buf_size <= size;
+            req_buf_wdata <= wdata;
+            req_buf_uncached <= uncached;
+            req_buf_cacheop <= cacheop;
+            req_buf_cacheop_index <= cacheop_index;
+            req_buf_cacheop_hit <= cacheop_hit;
+            req_buf_cacheop_wb <= cacheop_wb;
+        end
     end
 
     // replace buffer
     reg [INDEX_WIDTH-1:0] replace_buf_index;
     reg [TAG_WIDTH-1:0] replace_buf_tag_new;
     reg [NUM_WAY-1:0] replace_buf_replace_way;
+    reg [NUM_WAY-1:0] replace_buf_hit_way;
     reg [OFFSET_WIDTH-1:0] replace_buf_offset;
     reg replace_buf_write;
     reg [31:0] replace_buf_wdata;
@@ -122,43 +136,66 @@ module cache #
     wire [BANK_NUM_WIDTH-1:0] replace_buf_bank_num =
          get_bank_num(replace_buf_offset);
     reg replace_buf_uncached;
+    reg replace_buf_cacheop;
+    reg replace_buf_cacheop_hit;
+    reg [(BITS_PER_LINE*NUM_WAY)-1:0] replace_buf_read_lines;
+    reg [(TAG_WIDTH*NUM_WAY)-1:0] replace_buf_read_tags;
     wire [NUM_WAY-1:0] replace_way;
     always @(posedge clk) begin
         if (state == LOOKUP) begin
             replace_buf_index <= req_buf_index;
             replace_buf_tag_new <= req_buf_tag;
             replace_buf_replace_way <= replace_way;
+            replace_buf_hit_way <= hit_way;
             replace_buf_offset <= req_buf_offset;
             replace_buf_write <= req_buf_write;
             replace_buf_wdata <= req_buf_wdata;
             replace_buf_wstrb <= req_buf_wstrb;
             replace_buf_size <= req_buf_size;
             replace_buf_uncached <= req_buf_uncached;
+            replace_buf_cacheop <= req_buf_cacheop;
+            replace_buf_cacheop_hit <= req_buf_cacheop_hit;
+            replace_buf_read_lines <= read_lines;
+            replace_buf_read_tags <= read_tags;
         end
     end
-
+    reg [NUM_WAY-1:0] wb_ways;
+    wire [NUM_WAY-1:0] wb_way;
+    wire [NUM_WAY-1:0] wb_ways_next = wb_ways & ~wb_way;
+    wire wb_last_way = wb_ways_next == 0;
+    always @(posedge clk) begin
+        if (state == LOOKUP)
+            wb_ways <= (req_buf_cacheop_hit ? hit_way : v_ways) & dirty_ways;
+        else begin
+            if (replace_to_dirty_miss)
+                wb_ways <= wb_ways_next;
+        end
+    end
+    isolate_rightmost #
+        (.WIDTH(NUM_WAY))
+        wb_way_gen(
+            .en(1),
+            .in(wb_ways),
+            .out(wb_way)
+        );
 
     // cache table
     wire [NUM_WAY-1:0] hit_way;
     wire [NUM_WAY-1:0] v_ways;
+    wire [NUM_WAY-1:0] dirty_ways;
 
-    wire [NUM_WAY-1:0] d_write_way;
-    wire [INDEX_WIDTH-1:0] d_write_index;
-    wire d_write;
+    wire [NUM_WAY-1:0] table_d_write_way;
+    wire table_d_write;
     wire [INDEX_WIDTH-1:0] d_index;
     wire [NUM_WAY-1:0] d_way;
     wire dirty;
-
-    wire [NUM_WAY-1:0] tag_v_write_way;
-    wire [TAG_WIDTH-1:0] tag_write;
-    wire v_write;
 
     wire [31:0] table_rdata;
     wire [INDEX_WIDTH-1:0] table_index;
     wire [TAG_WIDTH-1:0] table_tag;
     wire [BANK_NUM_WIDTH-1:0] table_bank_num;
     wire [NUM_WAY-1:0] read_way;
-    wire [BYTES_PER_LINE*8-1:0] read_line;
+    wire [BITS_PER_LINE-1:0] read_line;
     wire [TAG_WIDTH-1:0] read_tag;
 
     wire table_write;
@@ -167,6 +204,10 @@ module cache #
     wire [BANK_NUM_WIDTH-1:0] table_write_bank_num;
     wire [31:0] table_write_data;
     wire [3:0] table_write_strb;
+    wire [NUM_WAY-1:0] table_tag_v_write_way;
+    wire [TAG_WIDTH-1:0] table_tag_write;
+    wire table_v_write;
+
     cache_table
         #(
             .NUM_WAY(NUM_WAY),
@@ -183,7 +224,9 @@ module cache #
             .rdata(table_rdata),
             .read_way(read_way),
             .read_line(read_line),
+            .read_lines(read_lines),
             .read_tag(read_tag),
+            .read_tags(read_tags),
 
             .write(table_write),
             .write_way(table_write_way),
@@ -192,19 +235,20 @@ module cache #
             .write_data(table_write_data),
             .write_strb(table_write_strb),
 
-            .d_write_way(d_write_way),
-            .d_write_index(d_write_index),
-            .d_write(d_write),
+            .d_write_way(table_d_write_way),
+            .d_write(table_d_write),
             .d_way(d_way),
             .d_index(d_index),
             .dirty(dirty),
+            .dirty_ways(dirty_ways),
 
-            .tag_v_write_way(tag_v_write_way),
-            .tag_write(tag_write),
-            .v_write(v_write)
+            .tag_v_write_way(table_tag_v_write_way),
+            .tag_write(table_tag_write),
+            .v_write(table_v_write)
         );
 
-    wire hit = ~req_buf_uncached & |hit_way & (state == LOOKUP);
+    wire hit = (~req_buf_uncached | req_buf_cacheop) & |hit_way & (state == LOOKUP);
+    wire _hit = (~req_buf_cacheop & hit) | (req_buf_cacheop & req_buf_cacheop_hit & ~hit);
     wire hit_write = hit & req_buf_write;
 
     // write buffer
@@ -248,39 +292,54 @@ module cache #
             state <= state_next;
     end
 
-    wire idle_to_idle = (state == IDLE) & (~valid | write_overlap);
+    wire req = valid | cacheop;
+
+    // IDLE to ...
+    wire idle_to_idle   = (state == IDLE) & (~req | write_overlap);
     wire idle_to_lookup = (state == IDLE) & ~idle_to_idle;
-
-    wire lookup_to_lookup = (state == LOOKUP) & (hit & valid & ~write_overlap);
-    wire lookup_to_idle = (state == LOOKUP) & (hit & ~lookup_to_lookup);
-    wire lookup_to_miss = (state == LOOKUP) &
-         (~hit & (req_buf_uncached ? ~req_buf_write : ~dirty));
+    // LOOKUP to ...
+    wire lookup_to_lookup = (state == LOOKUP) & (req & ~write_overlap & _hit);
+    wire lookup_to_idle   = (state == LOOKUP) & (~lookup_to_lookup & _hit);
+    wire lookup_to_refill = (state == LOOKUP) &
+         (
+             req_buf_cacheop & ~req_buf_cacheop_wb &
+             (
+                 (req_buf_cacheop_hit & hit)
+                 | req_buf_cacheop_index
+             )
+         );
+    wire lookup_to_miss       = (state == LOOKUP) &
+         (~_hit & ~req_buf_cacheop & (req_buf_uncached ? ~req_buf_write : ~dirty));
     wire lookup_to_dirty_miss = (state == LOOKUP) &
-         (~hit & (req_buf_uncached ? req_buf_write : dirty));
-
-    wire miss_to_miss = (state == MISS) & ~rd_rdy;
+         (~_hit & (req_buf_cacheop ? req_buf_cacheop_wb : (req_buf_uncached ? req_buf_write : dirty)));
+    // MISS to ...
+    wire miss_to_miss   = (state == MISS) & ~rd_rdy;
     wire miss_to_refill = (state == MISS) & rd_rdy;
-
+    // DIRTY_MISS to ...
     wire dirty_miss_to_dirty_miss = (state == DIRTY_MISS) & ~wr_rdy;
-    wire dirty_miss_to_replace = (state == DIRTY_MISS) & wr_rdy;
+    wire dirty_miss_to_replace    = (state == DIRTY_MISS) & wr_rdy;
+    // REPLACE to ...
+    wire replace_to_replace    = (state == REPLACE) & ~replace_buf_cacheop & ~rd_rdy;
+    wire replace_to_dirty_miss = (state == REPLACE) & (replace_buf_cacheop & ~wb_last_way);
+    wire replace_to_refill     = (state == REPLACE) &
+         (replace_buf_cacheop ?
+          wb_last_way :
+          (~replace_to_dirty_miss & rd_rdy & ~replace_buf_uncached));
+    wire replace_to_idle       = (state == REPLACE) & replace_buf_uncached & ~replace_buf_cacheop;
+    // REFILL to ...
+    wire refill_to_refill = (state == REFILL) & ~replace_buf_cacheop & ~(ret_valid && ret_last);
+    wire refill_to_idle   = (state == REFILL) & ~refill_to_refill;
 
-    wire replace_to_replace = (state == REPLACE) & ~rd_rdy;
-    wire replace_to_refill = (state == REPLACE) & rd_rdy & ~replace_buf_uncached;
-    wire replace_to_idle = (state == REPLACE) & replace_buf_uncached;
-
-    wire refill_to_refill = (state == REFILL) & ~(ret_valid && ret_last);
-    wire refill_to_idle = (state == REFILL) & ~refill_to_refill;
-
-    mux_1h #(.num_port(STATE_NUM), .data_width(STATE_BITS)) next_state_mux
+    mux_1h #(.num_port(STATE_NUM), .data_width(STATE_BITS)) state_next_mux
            (
                .select(
                    {
                        idle_to_idle | lookup_to_idle | refill_to_idle | replace_to_idle,
                        idle_to_lookup | lookup_to_lookup,
                        lookup_to_miss | miss_to_miss,
-                       lookup_to_dirty_miss | dirty_miss_to_dirty_miss,
+                       lookup_to_dirty_miss | dirty_miss_to_dirty_miss | replace_to_dirty_miss,
                        dirty_miss_to_replace | replace_to_replace,
-                       miss_to_refill | replace_to_refill | refill_to_refill
+                       miss_to_refill | replace_to_refill | refill_to_refill | lookup_to_refill
                    }),
                .in(
                    {
@@ -315,7 +374,7 @@ module cache #
 
     // D table read ports
     assign d_way = replace_way;
-    assign d_index = req_buf_index;
+    assign d_index = (state == LOOKUP) ? req_buf_index : replace_buf_index;
 
     ////
     // DIRTY_MISS
@@ -326,15 +385,61 @@ module cache #
     // REPLACE
     // Output the cache line that needs to be replaced.
     ////
-    assign wr_data = replace_buf_uncached ?
-           {{(WORDS_PER_LINE-1)*32{1'b0}}, replace_buf_wdata} : read_line;
+    wire [BITS_PER_LINE-1:0] wr_data_cacheop;
+    mux_1h #(.num_port(NUM_WAY), .data_width(BITS_PER_LINE))
+           wr_data_cacheop_mux (
+               .select(wb_way),
+               .in(replace_buf_read_lines),
+               .out(wr_data_cacheop)
+           );
+    mux_1h #(.num_port(3), .data_width(BITS_PER_LINE))
+           wr_data_mux (
+               .select(
+                   {
+                       ~replace_buf_cacheop & ~replace_buf_uncached,
+                       ~replace_buf_cacheop & replace_buf_uncached,
+                       replace_buf_cacheop
+                   }),
+               .in(
+                   {
+                       read_line,
+                       {{(WORDS_PER_LINE-1)*32{1'b0}}, replace_buf_wdata},
+                       wr_data_cacheop
+                   }),
+               .out(wr_data)
+           );
+    wire [TAG_WIDTH-1:0] wr_addr_cacheop_tag;
+    mux_1h #(.num_port(NUM_WAY), .data_width(TAG_WIDTH))
+           wr_addr_cacheop_tag_mux (
+               .select(wb_way),
+               .in(replace_buf_read_tags),
+               .out(wr_addr_cacheop_tag)
+           );
+    wire [TAG_WIDTH-1:0]wr_addr_tag;
+    mux_1h #(.num_port(3), .data_width(TAG_WIDTH))
+           wr_addr_tag_mux (
+               .select(
+                   {
+                       ~replace_buf_cacheop & replace_buf_uncached,
+                       ~replace_buf_cacheop & ~replace_buf_uncached,
+                       replace_buf_cacheop
+                   }),
+               .in(
+                   {
+                       replace_buf_tag_new,
+                       read_tag,
+                       wr_addr_cacheop_tag
+                   }),
+               .out(wr_addr_tag)
+           );
     assign wr_addr =
            {
-               replace_buf_uncached ? replace_buf_tag_new : read_tag,
+               wr_addr_tag,
                replace_buf_index,
-               replace_buf_uncached ? replace_buf_offset : {OFFSET_WIDTH{1'b0}}
+               (~replace_buf_cacheop & replace_buf_uncached) ?
+               replace_buf_offset : {OFFSET_WIDTH{1'b0}}
            };
-    assign wr_strb = replace_buf_wstrb;
+    assign wr_strb = replace_buf_cacheop ? 4'b1111 : replace_buf_wstrb;
 
     reg first_cycle_of_REPLACE;
     always @(posedge clk) begin
@@ -369,51 +474,83 @@ module cache #
          modified_ret_data : ret_data ;
 
     // cache table inputs
-    assign {
-            table_write,
-            table_write_index,
-            table_write_bank_num,
-            table_write_way,
-            table_write_data,
-            table_write_strb
-        } = (state == REFILL) ?
-        {
-            ret_valid & ~replace_buf_uncached,
-            replace_buf_index,
-            refill_buf_ptr,
-            replace_buf_replace_way,
-            refill_word,
-            4'b1111
-        } :
-        {
-            ~write_buf_idle,
-            write_buf_index,
-            write_buf_bank_num,
-            write_buf_way,
-            write_buf_wdata,
-            write_buf_wstrb
-        };
+    wire [NUM_WAY-1:0] invalidate_ways = replace_buf_cacheop_hit ?
+         replace_buf_hit_way : {NUM_WAY{1'b1}};
+    mux_1h #
+        (
+            .num_port(3),
+            .data_width(
+                1 + INDEX_WIDTH + BANK_NUM_WIDTH + NUM_WAY + 32 + 4
+                + NUM_WAY + 1 + TAG_WIDTH
+                + NUM_WAY + 1
+            )
+        )
+        table_write_mux
+        (
+            .select(
+                {
+                    (state == REFILL) && ~replace_buf_cacheop,
+                    (state == REFILL) && replace_buf_cacheop,
+                    state != REFILL
+                }),
+            .in(
+                {
+                    {
+                        ret_valid & ~replace_buf_uncached, // table_write,
+                        replace_buf_index,       // table_write_index,
+                        refill_buf_ptr,          // table_write_bank_num,
+                        replace_buf_replace_way, // table_write_way,
+                        refill_word,             // table_write_data,
+                        4'b1111,                 // table_write_strb,
+                        replace_buf_replace_way, // table_tag_v_write_way,
+                        1'b1,                    // table_v_write,
+                        replace_buf_tag_new,     // table_tag_write,
+                        replace_buf_replace_way, // table_d_write_way,
+                        replace_buf_write        // table_d_write
+                    },
+                    {
+                        1'b1,                    // table_write,
+                        replace_buf_index,       // table_write_index,
+                        {BANK_NUM_WIDTH{1'b0}},  // table_write_bank_num,
+                        {NUM_WAY{1'b0}},         // table_write_way,
+                        32'b0,                   // table_write_data,
+                        4'b0,                    // table_write_strb,
+                        invalidate_ways,         // table_tag_v_write_way,
+                        1'b0,                    // table_v_write,
+                        {TAG_WIDTH{1'bx}},       // table_tag_write
+                        invalidate_ways,         // table_d_write_way,
+                        1'b0                     // table_d_write
+                    },
+                    {
+                        ~write_buf_idle,         // table_write,
+                        write_buf_index,         // table_write_index,
+                        write_buf_bank_num,      // table_write_bank_num,
+                        write_buf_way,           // table_write_way,
+                        write_buf_wdata,         // table_write_data,
+                        write_buf_wstrb,         // table_write_strb,
+                        {NUM_WAY{1'b0}},         // table_tag_v_write_way,
+                        1'bx,                    // table_v_write,
+                        {TAG_WIDTH{1'bx}},       // table_tag_write
+                        write_buf_way,           // table_d_write_way,
+                        1'b1                     // table_d_write
+                    }
+                }),
+            .out(
+                {
+                    table_write,
+                    table_write_index,
+                    table_write_bank_num,
+                    table_write_way,
+                    table_write_data,
+                    table_write_strb,
+                    table_tag_v_write_way,
+                    table_v_write,
+                    table_tag_write,
+                    table_d_write_way,
+                    table_d_write
+                })
+        );
 
-    wire [NUM_WAY-1:0] replace_buf_replace_way_wen =
-         {NUM_WAY{state == REFILL & ~replace_buf_uncached}} & replace_buf_replace_way;
-    assign {
-            d_write_way,
-            d_write_index,
-            d_write
-        } = ~write_buf_idle ? {
-            write_buf_way,
-            write_buf_index,
-            1'b1
-        } :
-        {
-            replace_buf_replace_way_wen,
-            replace_buf_index,
-            replace_buf_write
-        };
-
-    assign tag_v_write_way = replace_buf_replace_way_wen;
-    assign tag_write = replace_buf_tag_new;
-    assign v_write = 1'b1;
 
     mux_1h #(.num_port(2), .data_width(INDEX_WIDTH))
            table_index_mux(
@@ -447,22 +584,34 @@ module cache #
     assign read_way = replace_buf_replace_way;
 
     // I/O
-    assign addr_ok = state_next == LOOKUP;
+    assign addr_ok = (state_next == LOOKUP) && ~cacheop;
+    assign cacheop_ok1 = (state == LOOKUP) && req_buf_cacheop;
     assign burst = ~replace_buf_uncached;
-    wire lookup_data_ok = (state == LOOKUP)
+    wire lookup_data_ok = (state == LOOKUP) && ~req_buf_cacheop
          && (hit | req_buf_write /* writes don't stall */);
-    wire refill_data_ok_cached = (state == REFILL) && ~replace_buf_uncached
+    wire refill_data_ok_cached = (state == REFILL) &&
+         ~replace_buf_cacheop && ~replace_buf_uncached
          && refill_requested_word && ret_valid && (~replace_buf_write);
-    wire refill_data_ok_uncached = (state == REFILL) && replace_buf_uncached
+    wire refill_data_ok_uncached = (state == REFILL) &&
+         ~replace_buf_cacheop && replace_buf_uncached
          && ret_valid && ret_last;
-    assign data_ok = refill_data_ok_cached | refill_data_ok_uncached | lookup_data_ok;
+    assign data_ok = |{
+               refill_data_ok_cached,
+               refill_data_ok_uncached,
+               lookup_data_ok
+           };
+    assign cacheop_ok2 =
+           |{
+               (state == LOOKUP) & req_buf_cacheop & req_buf_cacheop_hit & ~hit,
+               (state == REFILL) & replace_buf_cacheop
+           };
     mux_1h #(.num_port(3), .data_width(32)) rdata_mux(
                .select({lookup_data_ok, refill_data_ok_cached, refill_data_ok_uncached}),
                .in(    {lookup_rdata  , refill_word          , ret_data               }),
                .out(rdata)
            );
 
-    assign rd_req = (state == REPLACE) || (state == MISS);
+    assign rd_req = (state == REPLACE && ~replace_buf_cacheop) || (state == MISS);
     assign rd_addr =
            {
                replace_buf_tag_new,

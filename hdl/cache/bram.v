@@ -48,19 +48,15 @@ module bram
                      );
 `else
     reg [WIDTH - 1:0] ram_[DEPTH - 1:0];
-    reg [WIDTH - 1:0] dout_reg;
     reg [WIDTH - 1:0] din_reg;
     reg [$clog2(DEPTH)-1:0] addr_reg;
-    reg we_reg;
+    reg [WE_WIDTH-1:0] we_reg;
     always @(posedge clk) begin
-        dout_reg <= ram_[addr];
         addr_reg <= addr;
         din_reg <= din;
         we_reg <= we;
     end
-    assign dout = (we_reg & addr_reg == addr) ?
-           din_reg // WRITE_MODE_A("read_first")
-           : dout_reg;
+    assign dout = ram_[addr_reg];
 
     integer j;
     initial begin
@@ -75,14 +71,14 @@ module bram
         if (WRITE_BYTE) begin
             for (i = 0; i < num_bytes; i = i + 1) begin
                 always @(posedge clk) begin
-                    if (we[i])
-                        ram_[addr][i*8+7:i*8] <= din[i*8+7:i*8];
+                    if (we_reg[i])
+                        ram_[addr_reg][i*8+7:i*8] <= din_reg[i*8+7:i*8];
                 end
             end
         end else begin
             always @(posedge clk)
-                if (we)
-                    ram_[addr] <= din;
+                if (we_reg)
+                    ram_[addr_reg] <= din_reg;
         end
     endgenerate
 `endif
