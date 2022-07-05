@@ -104,8 +104,8 @@ module cpu_sram #
     wire [31:0] imm_EX;
 
     // register read
-    wire [31:0] rs_data_ID_forward;
-    wire [31:0] rt_data_ID_forward;
+    wire [31:0] rs_data_ID_compare;
+    wire [31:0] rt_data_ID_compare;
     wire [31:0] rs_data_ID;
     wire [31:0] rt_data_ID;
     wire [31:0] rs_data_EX;
@@ -124,7 +124,7 @@ module cpu_sram #
 
     wire [31:0] next_pc_without_exception;
 
-    wire [31:0] jr_target = rs_data_ID_forward; // jr, jalr
+    wire [31:0] jr_target = rs_data_ID_compare; // jr, jalr
     wire [31:0] branch_target;          // b*
     wire [31:0] jal_target =            // jal, j
          {curr_pc_IF[31:28] ,instruction_ID[25:0], {2{1'b0}}};
@@ -1103,8 +1103,8 @@ module cpu_sram #
                 .rt(rt),
                 .rs(rs),
 
-                .rs_data(rs_data_ID_forward),
-                .rt_data(rt_data_ID_forward),
+                .rs_data(rs_data_ID_compare),
+                .rt_data(rt_data_ID_compare),
 
                 .is_branch(is_branch_ID),
                 .branch_or_jump(branch_or_jump_ID),
@@ -1232,7 +1232,7 @@ module cpu_sram #
                .out(rs_data_ID)
            );
 
-    mux_1h #(.num_port(3)) rs_data_forward_mux(
+    mux_1h #(.num_port(3)) rs_data_compare_mux(
                 .select(
                     {
                         ~((rs_data_ID_is_from_mem & reg_write_is_alu_MEM) | rs_data_ID_is_from_wb),
@@ -1247,7 +1247,7 @@ module cpu_sram #
                         reg_write_data_WB
                     }
                 ),
-                .out(rs_data_ID_forward)
+                .out(rs_data_ID_compare)
             );
 
     wire rt_data_ID_is_no_forward;
@@ -1273,7 +1273,7 @@ module cpu_sram #
                .out(rt_data_ID)
            );
 
-    mux_1h #(.num_port(3)) rt_data_forward_mux(
+    mux_1h #(.num_port(3)) rt_data_compare_mux(
                 .select(
                     {
                         ~((rt_data_ID_is_from_mem & reg_write_is_alu_MEM) | rt_data_ID_is_from_wb),
@@ -1288,7 +1288,7 @@ module cpu_sram #
                         reg_write_data_WB
                     }
                 ),
-                .out(rt_data_ID_forward)
+                .out(rt_data_ID_compare)
             );
 
     forwarding forwarding_rs(
