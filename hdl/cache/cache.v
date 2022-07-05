@@ -368,7 +368,7 @@ module cache #
     replace_way_gen #(.NUM_WAY(NUM_WAY)) replace_way_gen(
                         .clk(clk),
                         .reset(reset),
-                        .en(state == LOOKUP && ~hit), // update lfsr on miss
+                        .en(state == LOOKUP), // update lfsr on miss
                         .v_ways(v_ways),
                         .replace_way(replace_way)
                     );

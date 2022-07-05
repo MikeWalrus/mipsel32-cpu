@@ -74,12 +74,12 @@ module data_sram_request #
     wire req =
          (ID_EX_reg_valid
           // avoid sending multiple requests when stalling:
-          & ID_EX_reg_allow_out
+          //& ID_EX_reg_allow_out
           // avoid sending request when exceptions have happened:
           & ~exception_EX_MEM_WB) ? 1 : 0;
     assign data_sram_req = req & (mem_ren_EX | mem_wen_EX);
-    assign inst_cacheop = req & cacheop_i;
-    assign data_cacheop = req & cacheop_d;
+    assign inst_cacheop = ID_EX_reg_valid & ~exception_EX_MEM_WB & cacheop_i;
+    assign data_cacheop = ID_EX_reg_valid & ~exception_EX_MEM_WB & cacheop_d;
 
     assign inst_cacheop_hit = cacheop_hit;
     assign inst_cacheop_index = cacheop_index;
