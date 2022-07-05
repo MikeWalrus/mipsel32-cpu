@@ -1,6 +1,8 @@
 module hazard_detect(
         input en,
 
+        input is_branch_or_jal_or_jr,
+
         input reg_write_is_mem_EX,
         input reg_write_is_mem_MEM,
         input mem_wait_for_data,
@@ -16,6 +18,11 @@ module hazard_detect(
     );
     assign IF_ID_reg_stall = en &
            |{
+               is_branch_or_jal_or_jr &
+               (rs_data_ID_is_from_ex | rt_data_ID_is_from_ex),
+               is_branch_or_jal_or_jr &
+               reg_write_is_mem_MEM &
+               (rs_data_ID_is_from_mem | rt_data_ID_is_from_mem),
                (reg_write_is_mem_EX | mfc0_EX | is_result_product_EX)
                & (rs_data_ID_is_from_ex | rt_data_ID_is_from_ex),
 

@@ -104,6 +104,8 @@ module cpu_sram #
     wire [31:0] imm_EX;
 
     // register read
+    wire [31:0] rs_data_ID_forward;
+    wire [31:0] rt_data_ID_forward;
     wire [31:0] rs_data_ID;
     wire [31:0] rt_data_ID;
     wire [31:0] rs_data_EX;
@@ -112,6 +114,7 @@ module cpu_sram #
     wire [31:0] rt_data_WB;
 
     // control transfer
+    wire is_branch_ID;
     wire branch_or_jump_ID;
 
     wire next_pc_is_next;
@@ -121,7 +124,7 @@ module cpu_sram #
 
     wire [31:0] next_pc_without_exception;
 
-    wire [31:0] jr_target = rs_data_ID; // jr, jalr
+    wire [31:0] jr_target = rs_data_ID_forward; // jr, jalr
     wire [31:0] branch_target;          // b*
     wire [31:0] jal_target =            // jal, j
          {curr_pc_IF[31:28] ,instruction_ID[25:0], {2{1'b0}}};
@@ -1100,9 +1103,10 @@ module cpu_sram #
                 .rt(rt),
                 .rs(rs),
 
-                .rs_data(rs_data_ID),
-                .rt_data(rt_data_ID),
+                .rs_data(rs_data_ID_forward),
+                .rt_data(rt_data_ID_forward),
 
+                .is_branch(is_branch_ID),
                 .branch_or_jump(branch_or_jump_ID),
 
                 .next_pc_is_next(next_pc_is_next),
@@ -1228,6 +1232,24 @@ module cpu_sram #
                .out(rs_data_ID)
            );
 
+    mux_1h #(.num_port(3)) rs_data_forward_mux(
+                .select(
+                    {
+                        ~((rs_data_ID_is_from_mem & reg_write_is_alu_MEM) | rs_data_ID_is_from_wb),
+                        rs_data_ID_is_from_mem & reg_write_is_alu_MEM,
+                        rs_data_ID_is_from_wb
+                    }
+                ),
+                .in(
+                    {
+                        rs_data_ID_no_forward,
+                        result_MEM,
+                        reg_write_data_WB
+                    }
+                ),
+                .out(rs_data_ID_forward)
+            );
+
     wire rt_data_ID_is_no_forward;
     wire rt_data_ID_is_from_ex;
     wire rt_data_ID_is_from_mem;
@@ -1251,6 +1273,24 @@ module cpu_sram #
                .out(rt_data_ID)
            );
 
+    mux_1h #(.num_port(3)) rt_data_forward_mux(
+                .select(
+                    {
+                        ~((rt_data_ID_is_from_mem & reg_write_is_alu_MEM) | rt_data_ID_is_from_wb),
+                        rt_data_ID_is_from_mem & reg_write_is_alu_MEM,
+                        rt_data_ID_is_from_wb
+                    }
+                ),
+                .in(
+                    {
+                        rt_data_ID_no_forward,
+                        result_MEM,
+                        reg_write_data_WB
+                    }
+                ),
+                .out(rt_data_ID_forward)
+            );
+
     forwarding forwarding_rs(
                    .r1(rs),
                    .reg_write_addr_EX(reg_write_addr_EX),
@@ -1267,6 +1307,7 @@ module cpu_sram #
                    .is_EX_MEM_valid(EX_MEM_reg_valid),
                    .is_MEM_WB_valid(MEM_WB_reg_valid)
                );
+
     forwarding forwarding_rt(
                    .r1(rt),
                    .reg_write_addr_EX(reg_write_addr_EX),
@@ -1286,6 +1327,7 @@ module cpu_sram #
 
     hazard_detect hazard_detect(
                       .en(IF_ID_reg_valid),
+                      .is_branch_or_jal_or_jr(is_branch_ID | next_pc_is_jal_target | next_pc_is_jr_target),
                       .reg_write_is_mem_EX(reg_write_is_mem_EX),
                       .reg_write_is_mem_MEM(reg_write_is_mem_MEM),
                       .mem_wait_for_data(EX_MEM_reg_stall_wait_for_data),

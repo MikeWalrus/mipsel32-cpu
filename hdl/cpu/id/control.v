@@ -10,6 +10,7 @@ module control(
         input [31:0] rs_data,
         input [31:0] rt_data,
 
+        output is_branch,
         output branch_or_jump,
 
         output next_pc_is_next,
@@ -221,7 +222,6 @@ module control(
     assign alu_b_is_8       = link;
 
     wire branch_take;
-    wire is_branch;
     branch_ctrl branch_ctrl(
                     .en(is_IF_ID_valid),
                     .opcode(opcode),
