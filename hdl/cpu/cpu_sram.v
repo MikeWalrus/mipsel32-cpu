@@ -148,8 +148,8 @@ module cpu_sram #
     wire is_result_product_EX;
 
     // alu
-    wire [13:0] alu_op_ID;
-    wire [13:0] alu_op_EX;
+    wire [14:0] alu_op_ID;
+    wire [14:0] alu_op_EX;
 
     wire overflow_en_ID;
     wire overflow_en_EX;
@@ -176,8 +176,8 @@ module cpu_sram #
 
     // alu control signals
     // that go through pipeline registers
-    wire [20:0] alu_ctrl_ID;
-    wire [20:0] alu_ctrl_EX;
+    wire [21:0] alu_ctrl_ID;
+    wire [21:0] alu_ctrl_EX;
     assign alu_ctrl_ID = {
                alu_a_is_pc_ID,
                alu_a_is_rs_data_ID,
@@ -331,6 +331,9 @@ module cpu_sram #
             cacheop_hit_EX,
             cacheop_wb_EX
         } = cacheop_EX;
+
+    // conditional move
+    wire cond_mov_ID;
 
     // register write
     wire reg_write_ID;
@@ -694,7 +697,7 @@ module cpu_sram #
                  );
 
     pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 +
-                          21 + 8 +
+                          22 + 8 +
                           5 + 10 + 7 +
                           9 + 1 + 5 +
                           32 + 1 + 1 +
@@ -1149,6 +1152,8 @@ module cpu_sram #
                 .mem_en(mem_en_ID),
                 .mem_wen(mem_wen_ID),
 
+                .cond_mov(cond_mov_ID),
+
                 .reg_write(reg_write_ID),
                 .reg_write_addr_is_rd(reg_write_addr_is_rd_ID),
                 .reg_write_addr_is_rt(reg_write_addr_is_rt_ID),
@@ -1233,22 +1238,22 @@ module cpu_sram #
            );
 
     mux_1h #(.num_port(3)) rs_data_compare_mux(
-                .select(
-                    {
-                        ~((rs_data_ID_is_from_mem & reg_write_is_alu_MEM) | rs_data_ID_is_from_wb),
-                        rs_data_ID_is_from_mem & reg_write_is_alu_MEM,
-                        rs_data_ID_is_from_wb
-                    }
-                ),
-                .in(
-                    {
-                        rs_data_ID_no_forward,
-                        result_MEM,
-                        reg_write_data_WB
-                    }
-                ),
-                .out(rs_data_ID_compare)
-            );
+               .select(
+                   {
+                       ~((rs_data_ID_is_from_mem & reg_write_is_alu_MEM) | rs_data_ID_is_from_wb),
+                       rs_data_ID_is_from_mem & reg_write_is_alu_MEM,
+                       rs_data_ID_is_from_wb
+                   }
+               ),
+               .in(
+                   {
+                       rs_data_ID_no_forward,
+                       result_MEM,
+                       reg_write_data_WB
+                   }
+               ),
+               .out(rs_data_ID_compare)
+           );
 
     wire rt_data_ID_is_no_forward;
     wire rt_data_ID_is_from_ex;
@@ -1274,22 +1279,22 @@ module cpu_sram #
            );
 
     mux_1h #(.num_port(3)) rt_data_compare_mux(
-                .select(
-                    {
-                        ~((rt_data_ID_is_from_mem & reg_write_is_alu_MEM) | rt_data_ID_is_from_wb),
-                        rt_data_ID_is_from_mem & reg_write_is_alu_MEM,
-                        rt_data_ID_is_from_wb
-                    }
-                ),
-                .in(
-                    {
-                        rt_data_ID_no_forward,
-                        result_MEM,
-                        reg_write_data_WB
-                    }
-                ),
-                .out(rt_data_ID_compare)
-            );
+               .select(
+                   {
+                       ~((rt_data_ID_is_from_mem & reg_write_is_alu_MEM) | rt_data_ID_is_from_wb),
+                       rt_data_ID_is_from_mem & reg_write_is_alu_MEM,
+                       rt_data_ID_is_from_wb
+                   }
+               ),
+               .in(
+                   {
+                       rt_data_ID_no_forward,
+                       result_MEM,
+                       reg_write_data_WB
+                   }
+               ),
+               .out(rt_data_ID_compare)
+           );
 
     forwarding forwarding_rs(
                    .r1(rs),
@@ -1327,7 +1332,13 @@ module cpu_sram #
 
     hazard_detect hazard_detect(
                       .en(IF_ID_reg_valid),
-                      .is_branch_or_jal_or_jr(is_branch_ID | next_pc_is_jal_target | next_pc_is_jr_target),
+                      .compare_in_ID(
+                          |{
+                              is_branch_ID,
+                              next_pc_is_jal_target,
+                              next_pc_is_jr_target,
+                              cond_mov_ID
+                          }),
                       .reg_write_is_mem_EX(reg_write_is_mem_EX),
                       .reg_write_is_mem_MEM(reg_write_is_mem_MEM),
                       .mem_wait_for_data(EX_MEM_reg_stall_wait_for_data),

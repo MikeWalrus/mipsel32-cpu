@@ -12,6 +12,7 @@
 `define ALU_LUI 11
 `define ALU_CLO 12
 `define ALU_CLZ 13
+`define ALU_A 14
 
 // use it like 
 // alu_op = `ALU_OP(`ALU_ADD);

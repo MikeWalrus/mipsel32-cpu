@@ -1,6 +1,6 @@
 `include "alu.vh"
 module alu(
-        input [13:0] op, // one-hot
+        input [14:0] op, // one-hot
         input [31:0] a,
         input [31:0] b,
         output overflow,
@@ -36,6 +36,7 @@ module alu(
     wire is_nor  = op[`ALU_NOR];
     wire is_clo  = op[`ALU_CLO];
     wire is_clz  = op[`ALU_CLZ];
+    wire is_a    = op[`ALU_A];
 
     wire bnegate = is_sub | is_slt | is_sltu;
     assign binvert = bnegate;
@@ -59,7 +60,7 @@ module alu(
     assign cl_1  = ((cl_lowbit[cl_2+:1] ==  1'b0) ? 1 : 0) + cl_2;
     assign cl_0  = ((cl_lowbit[cl_1]    ==  1'b0) ? 1 : 0) + cl_1;
     wire [31:0] cl_ans = {27'b0, cl_0};
-    mux_1h #(.num_port(12), .data_width(32)) result_mux(
+    mux_1h #(.num_port(13), .data_width(32)) result_mux(
                .select(
                    {
                        is_add | is_sub,
@@ -73,7 +74,8 @@ module alu(
                        is_or,
                        is_xor,
                        is_nor,
-                       is_clo | is_clz
+                       is_clo | is_clz,
+                       is_a
                    }),
                .in(
                    {
@@ -88,7 +90,8 @@ module alu(
                        (a | b),
                        (a ^ b),
                        ~(a | b),
-                       cl_ans
+                       cl_ans,
+                       a
                    }
                ),
                .out(result)

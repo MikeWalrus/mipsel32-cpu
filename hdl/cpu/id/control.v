@@ -27,7 +27,7 @@ module control(
         output lo_wen,
         output hi_wen,
 
-        output [13:0] alu_op,
+        output [14:0] alu_op,
         output alu_a_is_pc,
         output alu_a_is_rs_data,
         output alu_a_is_shamt,
@@ -51,6 +51,8 @@ module control(
 
         output mem_en,
         output mem_wen,
+
+        output cond_mov,
 
         output reg_write,
         output reg_write_addr_is_rd,
@@ -105,6 +107,9 @@ module control(
     wire is_swr    = opcode == 6'b101110;
     wire is_xori   = opcode == 6'b001110;
 
+    wire pref      = opcode == 6'b110011;
+
+    wire func_sync  = func == 6'b001111;
     wire func_add   = func == 6'b100000;
     wire func_addu  = func == 6'b100001;
     wire func_and   = func == 6'b100100;
@@ -131,6 +136,8 @@ module control(
     wire func_sub   = func == 6'b100010;
     wire func_subu  = func == 6'b100011;
     wire func_xor   = func == 6'b100110;
+    wire func_movn  = func == 6'b001011;
+    wire func_movz  = func == 6'b001010;
 
     wire is_mul = opcode == 6'b011100 & func == 6'b000010;
 
@@ -144,10 +151,13 @@ module control(
     assign mtc0 = cp0 & rs == 5'b00100;
     assign mfc0 = cp0 & rs == 5'b00000;
     wire co = rs[4] == 1;
-    assign eret =  cp0 & co & (func == 6'b011000);
-    assign tlbp =  cp0 & co & (func == 6'b001000);
+    assign eret  = cp0 & co & (func == 6'b011000);
+    assign tlbp  = cp0 & co & (func == 6'b001000);
     assign tlbwi = cp0 & co & (func == 6'b000010);
-    assign tlbr =  cp0 & co & (func == 6'b000001);
+    assign tlbr  = cp0 & co & (func == 6'b000001);
+    wire wait_   = cp0 & co & (func == 6'b100000);
+
+    wire nop = pref | wait_ | (is_R_type & func_sync);
 
     // cache operation
     assign cacheop_i = is_cache & rt[1:0] == 2'b00;
@@ -188,8 +198,10 @@ module control(
     wire alu_op_lui = (is_lui);//11
     wire alu_op_clo = is_special2 & func == 6'b100001;//12
     wire alu_op_clz = is_special2 & func == 6'b100000;//13
+    wire alu_op_a   = is_R_type & (func_movn | func_movz);//14
 
     assign alu_op = {
+               alu_op_a,
                alu_op_clz, alu_op_clo, alu_op_lui,
                alu_op_sra, alu_op_srl, alu_op_sll,
                alu_op_xor, alu_op_or, alu_op_nor, alu_op_and,
@@ -202,7 +214,21 @@ module control(
 
     assign imm_is_sign_extend = ~(is_andi | is_ori | is_xori);
 
-    assign reg_write = |{is_R_type, is_load, link, imm_arith, mfc0, is_mul, alu_op_clo, alu_op_clz};
+    wire conditional_reg_write =
+         (is_R_type & func_movz & (rt_data == 0))
+         | (is_R_type & func_movn & (rt_data != 0));
+    assign cond_mov = is_R_type & (func_movz | func_movn);
+    assign reg_write = |{
+               is_R_type & ~cond_mov,
+               conditional_reg_write,
+               is_load,
+               link,
+               imm_arith,
+               mfc0,
+               is_mul,
+               alu_op_clo,
+               alu_op_clz
+           } & ~nop;
     assign reg_write_addr_is_rd = is_R_type | is_mul;
     assign reg_write_addr_is_31 = link_31;
     assign reg_write_addr_is_rt = ~reg_write_addr_is_31 & ~reg_write_addr_is_rd;
@@ -311,7 +337,8 @@ module control(
                is_mul,
                alu_op_clo,
                alu_op_clz,
-               is_cache
+               is_cache,
+               pref
            };
 
     assign exc_break = is_R_type & func_break;
