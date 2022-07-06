@@ -87,7 +87,7 @@ module cpu_sram #
 
     // instruction
     wire [31:0] instruction_IF;
-    wire [31:0] instruction_ID;
+    (* MARK_DEBUG = "TRUE" *)wire [31:0] instruction_ID;
     wire [5:0] opcode;
     wire [4:0] rs;
     wire [4:0] rt;

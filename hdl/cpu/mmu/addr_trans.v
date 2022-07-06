@@ -8,14 +8,14 @@ module addr_trans #
         input [31:0] virt_addr,
         output [31:0] phy_addr,
         output tlb_mapped,
-        output cached,
+        (* MARK_DEBUG = "TRUE" *)output cached,
 
         // TLB
         output [18:0] vpn2,
         output odd_page,
         input [19:0] pfn,
         input [2:0] c,
-        input [2:0] cp0_config_k0
+        (* MARK_DEBUG = "TRUE" *)input [2:0] cp0_config_k0
     );
     // localparam virt_kuseg_start = 32'h0000_0000;
     localparam virt_kseg0_start = 32'h8000_0000;
