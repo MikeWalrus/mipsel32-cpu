@@ -23,11 +23,11 @@ all: cpu_axi_sim
 
 .SECONDEXPANSION:
 cpu_%_sim: $(cpu_source) $$(soc_$$*_source) $$(soc_$$*_sim_source) $(cache_source)
-	iverilog -Wall -o $@ -I$(headers) $(ARGS) -DIVERILOG \
+	iverilog -Wall -o $@ -I$(headers) $(ARGS) -D$* -DIVERILOG \
 		-DSIMULATION $^
 
 cpu_%_verilate: $(cpu_source) $$(soc_$$*_source) $$(soc_$$*_sim_source) $(cache_source)
-	verilator --trace --CFLAGS -g -Wno-TIMESCALEMOD -Wno-STMTDLY -Wno-PINMISSING -Wno-INITIALDLY -Wno-CASEINCOMPLETE -Wno-LITENDIAN -Wno-WIDTH -Wno-IMPLICIT -DIVERILOG --top-module tb_top -I$(headers) $(ARGS) --cc --exe --build sim_main.cpp $^
+	verilator --trace --CFLAGS -g -Wno-TIMESCALEMOD -Wno-STMTDLY -Wno-PINMISSING -Wno-INITIALDLY -Wno-CASEINCOMPLETE -Wno-LITENDIAN -Wno-WIDTH -Wno-IMPLICIT -D$* -DIVERILOG --top-module tb_top -I$(headers) $(ARGS) --cc --exe --build sim_main.cpp $^
 
 		
 .INTERMEDIATE:

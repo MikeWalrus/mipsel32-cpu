@@ -73,8 +73,10 @@ module data_sram_request #
 
     wire req =
          (ID_EX_reg_valid
+`ifdef sram
           // avoid sending multiple requests when stalling:
-          //& ID_EX_reg_allow_out
+          & ID_EX_reg_allow_out
+`endif
           // avoid sending request when exceptions have happened:
           & ~exception_EX_MEM_WB) ? 1 : 0;
     assign data_sram_req = req & (mem_ren_EX | mem_wen_EX);
