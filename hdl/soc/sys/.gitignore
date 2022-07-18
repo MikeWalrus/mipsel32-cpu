@@ -1,0 +1,4 @@
+vivado*.log
+vivado*.jou
+vivado*.str
+soc/*
