@@ -41,12 +41,12 @@ module cpu_sram #
         input inst_cacheop_ok1,
         input inst_cacheop_ok2,
 
-        (* MARK_DEBUG = "TRUE" *)output data_sram_req,
-        (* MARK_DEBUG = "TRUE" *)output data_sram_cached,
+        (* MARK_DEBUG = "FALSE" *)output data_sram_req,
+        (* MARK_DEBUG = "FALSE" *)output data_sram_cached,
         output data_sram_wr,
         output [1:0] data_sram_size,
         output [3:0] data_sram_wstrb,
-        (* MARK_DEBUG = "TRUE" *)output [31:0] data_sram_addr,
+        (* MARK_DEBUG = "FALSE" *)output [31:0] data_sram_addr,
         output [31:0] data_sram_wdata,
         input data_sram_addr_ok,
         input data_sram_data_ok,
@@ -61,9 +61,9 @@ module cpu_sram #
         input data_cacheop_ok2,
 
         output [31:0] debug_wb_pc,
-        (* MARK_DEBUG = "TRUE" *)output [3:0] debug_wb_rf_wen,
-        (* MARK_DEBUG = "TRUE" *)output [4:0] debug_wb_rf_wnum,
-        (* MARK_DEBUG = "TRUE" *)output [31:0] debug_wb_rf_wdata
+        (* MARK_DEBUG = "FALSE" *)output [3:0] debug_wb_rf_wen,
+        (* MARK_DEBUG = "FALSE" *)output [4:0] debug_wb_rf_wnum,
+        (* MARK_DEBUG = "FALSE" *)output [31:0] debug_wb_rf_wdata
     );
     wire reset;
     assign reset = ~resetn;
@@ -77,17 +77,17 @@ module cpu_sram #
     wire data_cacheop_MEM;
 
     // pc
-    (* MARK_DEBUG = "TRUE" *)wire [31:0] curr_pc_pre_IF;
-    (* MARK_DEBUG = "TRUE" *)wire [31:0] curr_pc_IF;
-    (* MARK_DEBUG = "TRUE" *)wire [31:0] curr_pc_ID;
-    (* MARK_DEBUG = "TRUE" *)wire [31:0] curr_pc_EX;
-    (* MARK_DEBUG = "TRUE" *)wire [31:0] curr_pc_MEM;
-    (* MARK_DEBUG = "TRUE" *)wire [31:0] curr_pc_WB;
+    (* MARK_DEBUG = "FALSE" *)wire [31:0] curr_pc_pre_IF;
+    (* MARK_DEBUG = "FALSE" *)wire [31:0] curr_pc_IF;
+    (* MARK_DEBUG = "FALSE" *)wire [31:0] curr_pc_ID;
+    (* MARK_DEBUG = "FALSE" *)wire [31:0] curr_pc_EX;
+    (* MARK_DEBUG = "FALSE" *)wire [31:0] curr_pc_MEM;
+    (* MARK_DEBUG = "FALSE" *)wire [31:0] curr_pc_WB;
 
 
     // instruction
     wire [31:0] instruction_IF;
-    (* MARK_DEBUG = "TRUE" *)wire [31:0] instruction_ID;
+    (* MARK_DEBUG = "FALSE" *)wire [31:0] instruction_ID;
     wire [5:0] opcode;
     wire [4:0] rs;
     wire [4:0] rt;
