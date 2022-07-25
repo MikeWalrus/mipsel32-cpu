@@ -128,7 +128,6 @@ module cpu_sram #
     wire [31:0] branch_target;          // b*
     wire [31:0] jal_target =            // jal, j
          {curr_pc_IF[31:28] ,instruction_ID[25:0], {2{1'b0}}};
-    wire [31:0] cp0_epc;
 
     reg is_delay_slot_ID;
     wire is_delay_slot_WB;
@@ -429,17 +428,10 @@ module cpu_sram #
     wire mfc0_EX = cp0_signals_EX[7];
     wire mtc0_MEM = cp0_signals_MEM[8];
     wire mfc0_MEM = cp0_signals_MEM[7];
-    wire exception_now;
-    wire eret_now;
-    wire refetch_now;
-    wire exception_now_pre_IF;
-    wire eret_now_pre_IF;
-    wire refetch_now_pre_IF;
-    wire exception_like_now = exception_now | eret_now | refetch_now;
-    wire tlb_refill_now_pre_IF;
-
-    wire [31:0] refetch_pc = curr_pc_WB;
-    wire [31:0] refetch_pc_pre_IF;
+    wire exception_like_now;
+    wire exception_like_now_pre_IF;
+    wire [31:0] exception_like_now_pc;
+    wire [31:0] exception_like_now_pc_pre_IF;
 
     wire [31:0] badvaddr_IF;
     wire [31:0] badvaddr_ID;
@@ -595,7 +587,7 @@ module cpu_sram #
     // pipeline registers
     pipeline_reg
         #(
-            .WIDTH(3 + 32 + 1)
+            .WIDTH(1 + 32)
         )
         _pre_IF_reg(
             .clk(clk),
@@ -611,19 +603,13 @@ module cpu_sram #
 
             .in(
                 {
-                    exception_now,
-                    eret_now,
-                    refetch_now,
-                    refetch_pc,
-                    tlb_refill_WB
+                    exception_like_now,
+                    exception_like_now_pc
                 }),
             .out(
                 {
-                    exception_now_pre_IF,
-                    eret_now_pre_IF,
-                    refetch_now_pre_IF,
-                    refetch_pc_pre_IF,
-                    tlb_refill_now_pre_IF
+                    exception_like_now_pre_IF,
+                    exception_like_now_pc_pre_IF
                 })
         );
 
@@ -987,13 +973,8 @@ module cpu_sram #
                .IF_ID_reg_valid_out(IF_ID_reg_valid_out),
 
                .exception_like_now(exception_like_now),
-               .exception_now_pre_IF(exception_now_pre_IF),
-               .eret_now_pre_IF(eret_now_pre_IF),
-               .refetch_now_pre_IF(refetch_now_pre_IF),
-               .tlb_refill_now_pre_IF(tlb_refill_now_pre_IF),
-
-               .cp0_epc(cp0_epc),
-               .refetch_pc_pre_IF(refetch_pc_pre_IF),
+               .exception_like_now_pre_IF(exception_like_now_pre_IF),
+               .exception_like_now_pc_pre_IF(exception_like_now_pc_pre_IF),
 
                .next_pc_is_next(next_pc_is_next),
 
@@ -1671,6 +1652,7 @@ module cpu_sram #
             .reg_num(cp0_reg_num_WB),
             .sel(cp0_reg_sel_WB),
             .reg_in(rt_data_WB),
+            .tlb_refill(tlb_refill_WB),
 
             .wen(cp0_reg_wen),
             .exception_like(exception_WB & MEM_WB_reg_valid),
@@ -1686,7 +1668,6 @@ module cpu_sram #
 
             .reg_out(cp0_reg),
 
-            .epc(cp0_epc),
             .cause_ip(cp0_cause_ip),
             .status_im(cp0_status_im),
             .status_ie(cp0_status_ie),
@@ -1695,9 +1676,8 @@ module cpu_sram #
             .entry_hi_asid(cp0_entry_hi_asid),
             .config_k0(cp0_config_k0),
 
-            .exception_now(exception_now),
-            .eret_now(eret_now),
-            .refetch_now(refetch_now),
+            .exception_like_now(exception_like_now),
+            .exception_like_now_pc(exception_like_now_pc),
 
             .w_index(w_index),
             .w_vpn2(w_vpn2),

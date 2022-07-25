@@ -34,13 +34,8 @@ module pre_IF #
 
         // exception-like events
         input exception_like_now,
-        input exception_now_pre_IF,
-        input eret_now_pre_IF,
-        input refetch_now_pre_IF,
-        input tlb_refill_now_pre_IF,
-
-        input [31:0] cp0_epc,
-        input [31:0] refetch_pc_pre_IF,
+        input exception_like_now_pre_IF,
+        input [31:0] exception_like_now_pc_pre_IF,
 
         output exception_pre_IF,
         output [4:0] exccode_pre_IF,
@@ -152,16 +147,9 @@ module pre_IF #
 
     always @(*) begin
         // curr_pc_pre_IF_req: the address we request this cycle
-        if (exception_now_pre_IF) begin
-            if (tlb_refill_now_pre_IF)
-                curr_pc_pre_IF_req = 32'hBFC0_0200;
-            else
-                curr_pc_pre_IF_req = 32'hBFC0_0380;
+        if (exception_like_now_pre_IF) begin
+            curr_pc_pre_IF_req = exception_like_now_pc_pre_IF;
         end
-        else if (eret_now_pre_IF)
-            curr_pc_pre_IF_req = cp0_epc;
-        else if (refetch_now_pre_IF)
-            curr_pc_pre_IF_req = refetch_pc_pre_IF;
         else if (delay_slot_miss || delay_slot_have_missed)
             // We've missed the delay slot, so we request for the instruction
             // of the delay slot in this cycle, and request for the
@@ -176,7 +164,7 @@ module pre_IF #
     always @(*) begin
         // curr_pc_pre_IF: the address we probably should request the next cycle
         if ((inst_sram_addr_ok && _pre_IF_reg_allow_out)
-                || eret_now_pre_IF || exception_now_pre_IF
+                || exception_like_now_pre_IF
                 || inst_addr_error || inst_tlb_error)
             curr_pc_pre_IF = curr_pc_pre_IF_req;
         else

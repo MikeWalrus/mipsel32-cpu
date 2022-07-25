@@ -25,6 +25,7 @@ module cp0 #
         input sel,
         input [31:0] reg_in,
 
+        // From WB
         input wen,
         input exception_like,
         input is_delay_slot,
@@ -36,10 +37,11 @@ module cp0 #
         input [TLBNUM_WIDTH:0] tlbp_result,
         input tlbr,
         input [18:0] tlb_error_vpn2,
+        input tlb_refill,
 
+        // To WB
         output reg [31:0] reg_out,
 
-        output reg [31:0] epc,
         output reg [7:0] cause_ip,
         output reg [7:0] status_im,
         output reg status_ie,
@@ -48,9 +50,9 @@ module cp0 #
         output reg [7:0] entry_hi_asid,
         output reg [2:0] config_k0,
 
-        output reg exception_now,
-        output eret_now,
-        output refetch_now,
+        // To pre-IF
+        output exception_like_now,
+        output [31:0] exception_like_now_pc,
 
         // TLB write port
         output  [$clog2(TLBNUM)-1:0] w_index,
@@ -82,6 +84,9 @@ module cp0 #
     wire eret = exception_like & exccode == `ERET;
     wire refetch = exception_like & exccode == `REFETCH;
     wire exception = exception_like & ~eret & ~refetch;
+    wire exc_tlb_refill = exception & tlb_refill;
+    wire exc_int = exception & exccode == `EXC_Int;
+    wire exc = exception & ~exc_tlb_refill & ~exc_int;
 
     localparam [0:0] config_m = 1'b1;
     localparam [0:0] config_be = 1'b0;
@@ -228,7 +233,7 @@ module cp0 #
             cause_exccode <= exccode;
     end
 
-    // reg [31:0] epc;
+    reg [31:0] epc;
     wire [31:0] epc_next = is_delay_slot ? pc - 32'd4 : pc;
     always @(posedge clk) begin
         if (exception & !status_exl) begin
@@ -396,12 +401,32 @@ module cp0 #
         endcase
     end
 
+    reg exception_now;
+    wire eret_now = eret;
+    wire refetch_now = refetch;
+    assign exception_like_now = exception_now | eret_now | refetch_now;
     always @(*) begin
         exception_now = 0;
         if (exception & ~status_exl) begin
             exception_now = 1;
         end
     end
-    assign eret_now = eret;
-    assign refetch_now = refetch;
+    mux_1h #(.num_port(5), .data_width(32))
+           exception_pc_mux(
+               .select({
+                           eret,
+                           refetch,
+                           exc_tlb_refill,
+                           exc_int,
+                           exc
+                       }),
+               .in({
+                       epc,
+                       pc,
+                       32'hBFC0_0200,
+                       32'hBFC0_0380,
+                       32'hBFC0_0380
+                   }),
+               .out(exception_like_now_pc)
+           );
 endmodule
