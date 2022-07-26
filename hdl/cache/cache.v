@@ -36,7 +36,7 @@ module cache #
         input ret_last,
         input [31:0] ret_data,
 
-        output wr_req,
+        (* MARK_DEBUG = "TRUE" *)output wr_req,
         output [31:0] wr_addr,
         output [3:0] wr_strb,
         output [1:0] wr_size,
@@ -147,7 +147,7 @@ module cache #
 
     localparam STATE_NUM = 6;
     localparam STATE_BITS = $clog2(STATE_NUM);
-    reg [STATE_BITS-1:0] state;
+    (* MARK_DEBUG = "TRUE" *)reg [STATE_BITS-1:0] state;
     wire [STATE_BITS-1:0] state_next;
 
     localparam [STATE_BITS-1:0] IDLE = 'd0;

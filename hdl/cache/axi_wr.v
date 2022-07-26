@@ -21,7 +21,7 @@ module axi_wr #
         input [3:0] strb,
 
         // ar r
-        input read_unfinish,
+        (* MARK_DEBUG = "TRUE" *)input read_unfinish,
 
         // aw
         output [3 :0] awid,
@@ -52,7 +52,7 @@ module axi_wr #
         output        bready
     );
 
-    reg        buf_empty;
+    (* MARK_DEBUG = "TRUE" *)reg        buf_empty;
     reg [D_LINE_WIDTH-1:0] buf_data;
     reg [D_BANK_NUM_WIDTH-1:0] buf_data_ptr;
     reg [31:0] buf_addr;
@@ -62,7 +62,7 @@ module axi_wr #
 
     localparam NUM_STATE = 5;
     localparam STATE_WIDTH = $clog2(NUM_STATE);
-    reg [STATE_WIDTH-1:0] state;
+    (* MARK_DEBUG = "TRUE" *) reg [STATE_WIDTH-1:0] state;
 
     localparam [STATE_WIDTH-1:0] IDLE  = 0;
     localparam [STATE_WIDTH-1:0] AW_W  = 1;
@@ -80,7 +80,7 @@ module axi_wr #
     wire w_handshake = wready & wvalid;
     wire w_finish = w_last & w_handshake;
 
-    wire idle_to_aw_w = state_idle & ~buf_empty & read_unfinish;
+    wire idle_to_aw_w = state_idle & ~buf_empty & ~read_unfinish;
     wire idle_to_idle = state_idle & ~idle_to_aw_w;
 
     wire aw_w_to_wait = state_aw_w & w_finish & awready;

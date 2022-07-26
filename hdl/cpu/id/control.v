@@ -164,7 +164,11 @@ module control(
     assign cacheop_d = is_cache & rt[1:0] == 2'b01;
     assign cacheop_index = |{
                rt == 5'b00000,
-               rt == 5'b00001
+               rt == 5'b00001,
+
+               // Index Store Tag (Treat like Index Invalid)
+               rt == 5'b01000,
+               rt == 5'b01001
            };
     assign cacheop_hit = |{
                rt == 5'b10000,
