@@ -36,6 +36,7 @@ module cp0 #
         input tlbp,
         input [TLBNUM_WIDTH:0] tlbp_result,
         input tlbr,
+        input tlbwr,
         input [18:0] tlb_error_vpn2,
         input tlb_refill,
 
@@ -359,7 +360,36 @@ module cp0 #
         end
     end
 
-    assign w_index = index_index;
+    reg [TLBNUM_WIDTH-1:0] wired_wired;
+    wire [31:0] wired = {{(32-TLBNUM_WIDTH){1'b0}}, wired_wired};
+    always @(posedge clk) begin
+        if (reset) begin
+            wired_wired <= 0;
+        end else if (reg_num == `WIRED) begin
+            if (wen) begin
+                wired_wired <= reg_in[TLBNUM_WIDTH-1:0];
+            end
+        end
+    end
+
+    reg [TLBNUM_WIDTH-1:0] random_random;
+    wire [31:0] random = {{(32-TLBNUM_WIDTH){1'b0}}, random_random};
+    always @(posedge clk) begin
+        if (reset) begin
+            random_random <= {TLBNUM_WIDTH{1'b1}};
+        end else begin
+            if (reg_num == `WIRED && wen) begin
+                random_random <= reg_in[TLBNUM_WIDTH-1:0];
+            end else begin
+                if (random_random == {TLBNUM_WIDTH{1'b1}})
+                    random_random <= wired_wired;
+                else
+                    random_random <= random_random + 1;
+            end
+        end
+    end
+
+    assign w_index = tlbwr ? random_random : index_index;
     assign w_vpn2 = entry_hi_vpn2;
     assign w_asid = entry_hi_asid;
     assign w_g = entry_lo_g[0] & entry_lo_g[1];
@@ -378,10 +408,14 @@ module cp0 #
         case (reg_num)
             `INDEX:
                 reg_out = index;
+            `RANDOM:
+                reg_out = random;
             `ENTRYLO0:
                 reg_out = entry_lo[0];
             `ENTRYLO1:
                 reg_out = entry_lo[1];
+            `WIRED:
+                reg_out = wired;
             `ENTRYHI:
                 reg_out = entry_hi;
             `STATUS:

@@ -72,6 +72,7 @@ module control(
         output eret,
         output tlbp,
         output tlbwi,
+        output tlbwr,
         output tlbr,
 
         output cacheop_i,
@@ -154,6 +155,7 @@ module control(
     assign eret  = cp0 & co & (func == 6'b011000);
     assign tlbp  = cp0 & co & (func == 6'b001000);
     assign tlbwi = cp0 & co & (func == 6'b000010);
+    assign tlbwr = cp0 & co & (func == 6'b000110);
     assign tlbr  = cp0 & co & (func == 6'b000001);
     wire wait_   = cp0 & co & (func == 6'b100000);
 

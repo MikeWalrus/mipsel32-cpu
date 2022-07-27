@@ -2,8 +2,8 @@
 module cpu_sram #
     (
         // TLB
-        parameter TLB = 0,
-        parameter TLBNUM = 2,
+        parameter TLB = 1,
+        parameter TLBNUM = 16,
         parameter TLBNUM_WIDTH = $clog2(TLBNUM),
 
         // Cache
@@ -579,6 +579,10 @@ module cpu_sram #
     wire tlbwi_EX;
     wire tlbwi_MEM;
     wire tlbwi_WB;
+    wire tlbwr_ID;
+    wire tlbwr_EX;
+    wire tlbwr_MEM;
+    wire tlbwr_WB;
     wire tlbr_ID;
     wire tlbr_EX;
     wire tlbr_MEM;
@@ -687,7 +691,7 @@ module cpu_sram #
                           5 + 10 + 7 +
                           9 + 1 + 5 +
                           32 + 1 + 1 +
-                          1 + 1 + 1 +
+                          1 + 1 + 1 + 1 +
                           1 +
                           19 +
                           5
@@ -709,7 +713,7 @@ module cpu_sram #
                              shamt_ID, mult_div_ctrl_ID, mem_ctrl_ID,
                              cp0_signals_ID, exception_ID, exccode_ID,
                              badvaddr_ID, mem_en_ID, mem_wen_ID,
-                             tlbp_ID, tlbwi_ID, tlbr_ID,
+                             tlbp_ID, tlbwi_ID, tlbwr_ID, tlbr_ID,
                              tlb_refill_ID,
                              tlb_error_vpn2_ID,
                              cacheop_ID
@@ -721,7 +725,7 @@ module cpu_sram #
                              shamt_EX, mult_div_ctrl_EX, mem_ctrl_EX,
                              cp0_signals_EX, exception_EX_old, exccode_EX_old,
                              badvaddr_EX_old, mem_en_EX, mem_wen_EX,
-                             tlbp_EX, tlbwi_EX, tlbr_EX,
+                             tlbp_EX, tlbwi_EX, tlbwr_EX, tlbr_EX,
                              tlb_refill_EX_old,
                              tlb_error_vpn2_EX_old,
                              cacheop_EX
@@ -737,7 +741,7 @@ module cpu_sram #
                           32 +
                           3 +
                           TLBNUM_WIDTH+1 +
-                          1 + 1 + 1 +
+                          1 + 1 + 1 + 1 +
                           1 +
                           19))
                  EX_MEM_reg(
@@ -760,7 +764,7 @@ module cpu_sram #
                              badvaddr_EX,
                              data_sram_req, data_cacheop, inst_cacheop,
                              tlbp_result_EX,
-                             tlbp_EX, tlbwi_EX, tlbr_EX,
+                             tlbp_EX, tlbwi_EX, tlbwr_EX, tlbr_EX,
                              tlb_refill_EX,
                              tlb_error_vpn2_EX
                          }),
@@ -774,7 +778,7 @@ module cpu_sram #
                              badvaddr_MEM,
                              data_sram_req_MEM, data_cacheop_MEM, inst_cacheop_MEM,
                              tlbp_result_MEM,
-                             tlbp_MEM, tlbwi_MEM, tlbr_MEM,
+                             tlbp_MEM, tlbwi_MEM, tlbwr_MEM, tlbr_MEM,
                              tlb_refill_MEM,
                              tlb_error_vpn2_MEM
                          }),
@@ -782,7 +786,8 @@ module cpu_sram #
                  );
 
     pipeline_reg #(.WIDTH(
-                       32 + 38 + 32 + 9 + 1 + 5 + 32 + TLBNUM_WIDTH+1 + 1 + 1 + 1 + 1 + 19))
+                       32 + 38 + 32 + 9 + 1 + 5 + 32 +
+                       TLBNUM_WIDTH+1 + 1 + 1 + 1 + 1 + 1 + 19))
                  MEM_WB_reg(
                      .clk(clk),
                      .reset(reset),
@@ -806,6 +811,7 @@ module cpu_sram #
                              tlbp_result_MEM,
                              tlbp_MEM,
                              tlbwi_MEM,
+                             tlbwr_MEM,
                              tlbr_MEM,
                              tlb_refill_MEM,
                              tlb_error_vpn2_MEM
@@ -822,6 +828,7 @@ module cpu_sram #
                              tlbp_result_WB,
                              tlbp_WB,
                              tlbwi_WB,
+                             tlbwr_WB,
                              tlbr_WB,
                              tlb_refill_WB,
                              tlb_error_vpn2_WB
@@ -1151,6 +1158,7 @@ module cpu_sram #
                 .eret(eret_ID),
                 .tlbp(tlbp_ID),
                 .tlbwi(tlbwi_ID),
+                .tlbwr(tlbwr_ID),
                 .tlbr(tlbr_ID),
 
                 .cacheop_i(cacheop_i_ID),
@@ -1664,6 +1672,7 @@ module cpu_sram #
             .tlbp(tlbp_WB & ~exception_WB & MEM_WB_reg_valid),
             .tlbp_result(tlbp_result_WB),
             .tlbr(tlbr_WB & ~exception_WB & MEM_WB_reg_valid),
+            .tlbwr(tlbwr_WB),
             .tlb_error_vpn2(tlb_error_vpn2_WB),
 
             .reg_out(cp0_reg),
@@ -1705,7 +1714,7 @@ module cpu_sram #
             .r_d1(r_d1),
             .r_v1(r_v1)
         );
-    assign tlb_we = tlbwi_WB & ~exception_WB & MEM_WB_reg_valid;
+    assign tlb_we = (tlbwi_WB | tlbwr_WB) & ~exception_WB & MEM_WB_reg_valid;
 
     assign {
             pre_IF_IF_reg_flush,
