@@ -566,9 +566,10 @@ module cpu_sram #
     wire [18:0] tlb_error_vpn2_MEM;
     wire [18:0] tlb_error_vpn2_WB;
 
-    wire exc_syscall_ID;
-    wire exc_reserved_ID;
     wire exc_break_ID;
+    wire exc_cp_unusable_ID;
+    wire exc_reserved_ID;
+    wire exc_syscall_ID;
     wire eret_ID;
 
     wire tlbp_ID;
@@ -1152,9 +1153,10 @@ module cpu_sram #
                 .mtc0(mtc0_ID),
                 .mfc0(mfc0_ID),
 
-                .exc_syscall(exc_syscall_ID),
-                .exc_reserved(exc_reserved_ID),
                 .exc_break(exc_break_ID),
+                .exc_cp_unusable(exc_cp_unusable_ID),
+                .exc_reserved(exc_reserved_ID),
+                .exc_syscall(exc_syscall_ID),
                 .eret(eret_ID),
                 .tlbp(tlbp_ID),
                 .tlbwi(tlbwi_ID),
@@ -1351,12 +1353,13 @@ module cpu_sram #
                   .exc_interrupt(exc_interrupt)
               );
 
-    exception_multiple #(.NUM(5)) exception_multiple_ID(
+    exception_multiple #(.NUM(6)) exception_multiple_ID(
                            .exception_old(exception_ID_old),
                            .exccode_old(exccode_ID_old),
                            .exceptions(
                                {
                                    exc_interrupt,
+                                   exc_cp_unusable_ID,
                                    exc_reserved_ID,
                                    eret_ID,
                                    exc_syscall_ID,
@@ -1365,6 +1368,7 @@ module cpu_sram #
                            .exccodes(
                                {
                                    `EXC_Int,
+                                   `EXC_CpU,
                                    `EXC_RI,
                                    `ERET,
                                    `EXC_Sys,

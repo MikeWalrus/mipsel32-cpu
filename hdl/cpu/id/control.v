@@ -66,9 +66,10 @@ module control(
 
         output overflow_en,
 
-        output exc_syscall,
-        output exc_reserved,
         output exc_break,
+        output exc_cp_unusable,
+        output exc_reserved,
+        output exc_syscall,
         output eret,
         output tlbp,
         output tlbwi,
@@ -107,6 +108,9 @@ module control(
     wire is_swl    = opcode == 6'b101010;
     wire is_swr    = opcode == 6'b101110;
     wire is_xori   = opcode == 6'b001110;
+
+    wire is_ll     = opcode == 6'b110000;
+    wire is_sc     = opcode == 6'b111000;
 
     wire pref      = opcode == 6'b110011;
 
@@ -160,6 +164,16 @@ module control(
     wire wait_   = cp0 & co & (func == 6'b100000);
 
     wire nop = pref | wait_ | (is_R_type & func_sync);
+
+    // CP1
+    wire cp1  = opcode == 6'b010001;
+    wire cp1x = opcode == 6'b010011;
+    wire lwc1 = opcode == 6'b110001;
+    wire swc1 = opcode == 6'b111001;
+    wire ldc1 = opcode == 6'b110101;
+    wire sdc1 = opcode == 6'b111101;
+    wire is_movt = is_R_type & (func == 6'b000001);
+    wire floating_point = |{cp1, cp1x, lwc1, swc1, ldc1, sdc1, is_movt};
 
     // cache operation
     assign cacheop_i = is_cache & rt[1:0] == 2'b00;
@@ -314,6 +328,7 @@ module control(
 
     // exception
     assign exc_syscall = is_R_type & func_syscall;
+    assign exc_cp_unusable = floating_point | is_ll | is_sc;
     assign exc_reserved = ~|{
                is_R_type,
                is_branch,
@@ -346,6 +361,5 @@ module control(
                is_cache,
                pref
            };
-
     assign exc_break = is_R_type & func_break;
 endmodule
