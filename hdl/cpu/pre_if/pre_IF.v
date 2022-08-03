@@ -42,7 +42,10 @@ module pre_IF #
         output tlb_refill,
 
         // PC
-        input next_pc_is_next,
+		input branch_flush,
+		input [31:0] next_pc_without_exception_branch_target,
+
+        input next_pc_is_next_branch_predict,
 
         input [31:0] next_pc_without_exception,
         input [31:0] curr_pc_IF,
@@ -84,7 +87,7 @@ module pre_IF #
 
     // We misses the delay slot if:
     wire delay_slot_miss =
-         ~next_pc_is_next & ~pre_IF_IF_reg_valid;
+         ~next_pc_is_next_branch_predict & ~pre_IF_IF_reg_valid;
     reg delay_slot_have_missed;
 
     reg [31:0] target;
@@ -93,9 +96,9 @@ module pre_IF #
         if (reset) begin
             use_target <= 0;
         end
-        if (IF_ID_reg_valid_out & !next_pc_is_next) begin
+        if (IF_ID_reg_valid_out & !next_pc_is_next_branch_predict) begin
             target <= next_pc_without_exception;
-            if (pre_IF_IF_reg_valid & leaving_pre_IF)
+            if (pre_IF_IF_reg_valid & leaving_pre_IF & ~branch_flush)
                 use_target <= 0; // haven't missed the delay slot
             else
                 use_target <= 1;
@@ -117,7 +120,7 @@ module pre_IF #
     end
 
     wire should_discard_instruction =
-         exception_like_now & (
+			 (exception_like_now | branch_flush) & (
              // the address is accepted in pre-IF
              (inst_sram_req & inst_sram_addr_ok)
              || // or
@@ -158,7 +161,7 @@ module pre_IF #
         else if (use_target)
             curr_pc_pre_IF_req = target;
         else
-            curr_pc_pre_IF_req = next_pc_without_exception;
+            curr_pc_pre_IF_req = next_pc_without_exception_branch_target;
     end
 
     always @(*) begin

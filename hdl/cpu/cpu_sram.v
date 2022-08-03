@@ -14,7 +14,12 @@ module cpu_sram #
         parameter D_NUM_WAY = 2,
         // BYTES_PER_LINE * NUM_LINE must <= 4096
         parameter D_BYTES_PER_LINE = 16,
-        parameter D_NUM_LINE = 256
+        parameter D_NUM_LINE = 256,
+
+		// Branch Predict Line
+		parameter WIDTH = 4,
+		parameter LINE_NUM = 16,
+		parameter ADDR_WIDTH = 32
     )
     (
         input clk,
@@ -84,6 +89,34 @@ module cpu_sram #
     (* MARK_DEBUG = "TRUE" *)wire [31:0] curr_pc_MEM;
     (* MARK_DEBUG = "TRUE" *)wire [31:0] curr_pc_WB;
 
+	// tiny decode
+	wire is_branch_branch_predict_IF;
+	wire is_branch_branch_predict_ID;
+	wire is_jr_branch_predict;
+
+	// branch predict
+	wire [WIDTH-1:0] request_line_index;
+	wire [31:0] request_pc_target;
+	wire request_miss_IF;
+	wire request_miss_ID;
+	wire request_state;
+
+	wire [31:0] static_branch_predict_result_IF = (request_miss_IF & is_branch_branch_predict_IF) ? curr_pc_IF + 32'd8 : 32'd0;
+	wire [31:0] static_branch_predict_result_ID;
+
+	wire [31:0] dynamic_branch_predict_result_IF = (~request_miss_IF & is_branch_branch_predict_IF) ? (request_state ? request_pc_target : curr_pc_IF + 32'd4) : 32'd0;
+	wire [31:0] dynamic_branch_predict_result_ID;
+
+	wire replace_en_IF = request_miss_IF & is_branch_branch_predict_IF & ~is_jr_branch_predict;
+	wire replace_en_ID;
+	wire [31:0] replace_pc_target;
+	wire static_branch_predict;
+
+	wire fresh_en_IF = ~request_miss_IF & is_branch_branch_predict_IF & ~is_jr_branch_predict;
+	wire [WIDTH-1:0] fresh_line_index_IF = request_line_index;
+	wire fresh_en_ID;
+	wire [WIDTH-1:0] fresh_line_index_ID;
+	wire dynamic_branch_predict;
 
     // instruction
     wire [31:0] instruction_IF;
@@ -116,6 +149,10 @@ module cpu_sram #
     // control transfer
     wire is_branch_ID;
     wire branch_or_jump_ID;
+
+	wire next_pc_is_next_branch_predict;
+	wire next_pc_is_branch_branch_predict;
+	wire [31:0] next_pc_without_exception_branch_target;
 
     wire next_pc_is_next;
     wire next_pc_is_branch_target;
@@ -468,13 +505,14 @@ module cpu_sram #
     wire pre_IF_IF_reg_valid_out;
     wire pre_IF_IF_reg_allow_out;
     wire pre_IF_IF_reg_valid;
-
+	wire branch_flush;
     wire pre_IF_IF_reg_flush;
     wire pre_IF_IF_reg_stall_wait_for_data;
     wire pre_IF_IF_reg_stall_discard_instruction;
     wire pre_IF_IF_reg_stall =
          |{pre_IF_IF_reg_stall_wait_for_data,
            pre_IF_IF_reg_stall_discard_instruction};
+	wire leaving_IF = pre_IF_IF_reg_valid_out && pre_IF_IF_reg_allow_out;
 
     wire IF_ID_reg_valid_in = pre_IF_IF_reg_valid_out;
     wire IF_ID_reg_valid_out;
@@ -649,7 +687,12 @@ module cpu_sram #
                 })
         );
 
-    pipeline_reg #(.WIDTH(32 + 32 + 1 + 5 + 32 + 1 + 19)) IF_ID_reg(
+    pipeline_reg #(.WIDTH(32 + 32 + 1 + 5 + 32 + 1 + 19
+						  + 1
+						  + 1
+						  + 32 + 32
+						  + 1
+						  + 1 + WIDTH)) IF_ID_reg(
                      .clk(clk),
                      .reset(reset),
                      .stall(IF_ID_reg_stall),
@@ -667,8 +710,20 @@ module cpu_sram #
                              exccode_IF,
                              badvaddr_IF,
                              tlb_refill_IF,
-                             tlb_error_vpn2_IF
-                         }),
+                             tlb_error_vpn2_IF,
+
+							 is_branch_branch_predict_IF,
+
+							 request_miss_IF,
+
+							 static_branch_predict_result_IF,
+							 dynamic_branch_predict_result_IF,
+
+							 replace_en_IF,
+							 fresh_en_IF,
+							 fresh_line_index_IF
+	                 	 }
+					 ),
                      .out(
                          {
                              curr_pc_ID,
@@ -677,8 +732,20 @@ module cpu_sram #
                              exccode_ID_old,
                              badvaddr_ID,
                              tlb_refill_ID,
-                             tlb_error_vpn2_ID
-                         }),
+                             tlb_error_vpn2_ID,
+
+							 is_branch_branch_predict_ID,
+
+							 request_miss_ID,
+
+							 static_branch_predict_result_ID,
+							 dynamic_branch_predict_result_ID,
+
+							 replace_en_ID,
+							 fresh_en_ID,
+							 fresh_line_index_ID
+                     	 }
+					 ),
                      .valid(IF_ID_reg_valid)
                  );
 
@@ -976,9 +1043,12 @@ module cpu_sram #
                .exception_like_now_pre_IF(exception_like_now_pre_IF),
                .exception_like_now_pc_pre_IF(exception_like_now_pc_pre_IF),
 
-               .next_pc_is_next(next_pc_is_next),
+			   .branch_flush(branch_flush),
+			   .next_pc_without_exception_branch_target(next_pc_without_exception_branch_target),
 
-               .next_pc_without_exception(next_pc_without_exception),
+               .next_pc_is_next_branch_predict(next_pc_is_next_branch_predict),
+
+               .next_pc_without_exception(~next_pc_is_next_branch_predict & next_pc_is_next ? curr_pc_ID + 32'd8 : next_pc_without_exception),
                .curr_pc_IF(curr_pc_IF),
                .curr_pc_pre_IF(curr_pc_pre_IF),
 
@@ -1001,6 +1071,80 @@ module cpu_sram #
     //
     // IF Stage
     //
+	branch_flush_unit branch_flush_unit(
+		.leaving_pre_IF(leaving_pre_IF),
+		.leaving_IF(leaving_IF),
+		.leaving_ID(leaving_ID),
+		.branch_predict_fail(IF_ID_reg_valid_out & is_branch_branch_predict_ID & (request_miss_ID ? ~static_branch_predict : ~dynamic_branch_predict)),
+
+		.branch_flush(branch_flush)
+	);
+
+	tiny_branch_decode tiny_branch_decode(
+		.is_pre_IF_IF_valid(pre_IF_IF_reg_valid),
+		.opcode(instruction_IF[31:26]),
+		.func(instruction_IF[5:0]),
+		.rt(instruction_IF[20:16]),
+		.is_branch_branch_predict(is_branch_branch_predict_IF),
+		.is_jr_branch_predict(is_jr_branch_predict)
+	);
+
+	branch_predict #(
+		.WIDTH(WIDTH),
+		.LINE_NUM(LINE_NUM),
+		.ADDR_WIDTH(32)
+	) branch_predict (
+		.clk(clk),
+		.reset(reset),
+
+		.replace_en(replace_en_ID & IF_ID_reg_valid_out),
+		.replace_pc(curr_pc_ID),
+		.replace_pc_target(replace_pc_target),
+		.static_branch_predict(static_branch_predict),
+
+		.fresh_en(fresh_en_ID & IF_ID_reg_valid_out),
+		.fresh_line_index(fresh_line_index_ID),
+		.dynamic_branch_predict(dynamic_branch_predict),
+
+		.request_pc(curr_pc_IF),
+		.request_line_index(request_line_index),
+		.request_pc_target(request_pc_target),
+		.request_miss(request_miss_IF),
+		.request_state(request_state)
+	);
+	mux_1h #(.num_port(2)) replace_pc_target_mux(
+		.select(
+			{
+				IF_ID_reg_valid & replace_en_ID & ~next_pc_is_jal_target,
+				IF_ID_reg_valid & next_pc_is_jal_target
+			}
+		),
+		.in(
+			{
+				branch_target,
+				jal_target
+			}
+		),
+		.out(replace_pc_target)
+	);
+	assign static_branch_predict = ~|(next_pc_without_exception_branch_target ^ next_pc_without_exception);
+	assign dynamic_branch_predict = ~|(next_pc_without_exception_branch_target ^ next_pc_without_exception);
+
+	mux_1h #(.num_port(2)) next_pc_branch_predict_mux(
+			   .select(
+				   {
+					   next_pc_is_next_branch_predict,
+					   next_pc_is_branch_branch_predict
+				   }
+			   ),
+			   .in(
+				   {
+					   curr_pc_IF + 32'd4,
+					   request_miss_ID ? static_branch_predict_result_ID : dynamic_branch_predict_result_ID
+				   }
+			   ),
+			   .out(next_pc_without_exception_branch_target)
+	);
 
     mux_1h #(.num_port(4)) next_pc_mux(
                .select(
@@ -1090,8 +1234,13 @@ module cpu_sram #
                 .rs_data(rs_data_ID_compare),
                 .rt_data(rt_data_ID_compare),
 
+				.is_branch_branch_predict(is_branch_branch_predict_ID),
+
                 .is_branch(is_branch_ID),
                 .branch_or_jump(branch_or_jump_ID),
+
+				.next_pc_is_next_branch_predict(next_pc_is_next_branch_predict),
+				.next_pc_is_branch_branch_predict(next_pc_is_branch_branch_predict),
 
                 .next_pc_is_next(next_pc_is_next),
                 .next_pc_is_branch_target(next_pc_is_branch_target),
@@ -1713,7 +1862,13 @@ module cpu_sram #
             ID_EX_reg_flush,
             EX_MEM_reg_flush,
             MEM_WB_reg_flush
-        } = {5{exception_like_now}};
+        } = {
+			exception_like_now | branch_flush,
+			exception_like_now,
+			exception_like_now,
+			exception_like_now,
+			exception_like_now
+		};
 
     assign reg_write_data_WB =
            mfc0_WB ? cp0_reg : reg_write_data_WB_not_mfc0;

@@ -10,8 +10,13 @@ module control(
         input [31:0] rs_data,
         input [31:0] rt_data,
 
+		input is_branch_branch_predict,
+
         output is_branch,
         output branch_or_jump,
+
+		output next_pc_is_next_branch_predict,
+		output reg next_pc_is_branch_branch_predict,
 
         output next_pc_is_next,
         output reg next_pc_is_branch_target,
@@ -262,6 +267,16 @@ module control(
                     .take(branch_take),
                     .link(branch_link)
                 );
+
+	always @(*) begin
+		next_pc_is_branch_branch_predict = 0;
+		if (is_IF_ID_valid) begin
+			if (is_branch_branch_predict)
+			next_pc_is_branch_branch_predict = 1;
+		end
+	end
+	assign next_pc_is_next_branch_predict = ~next_pc_is_branch_branch_predict;
+
     always @(*) begin
         next_pc_is_jr_target = 0;
         next_pc_is_jal_target = 0;
