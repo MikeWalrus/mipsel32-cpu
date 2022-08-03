@@ -152,7 +152,7 @@ module cp0 #
              config1_fp
          };
 
-    wire status_bev = 1'b1; // TODO: implement this
+    reg status_bev;
     // reg [7:0] status_im;
     // reg status_exl;
     // reg status_ie;
@@ -171,6 +171,7 @@ module cp0 #
         if (reset) begin
             status_exl <= 1'b0;
             status_ie <= 1'b0;
+            status_bev <= 1'b1;
         end else if (eret) begin
             status_exl <= 1'b0;
         end else if (exception) begin
@@ -180,6 +181,7 @@ module cp0 #
                 status_ie <= reg_in[0];
                 status_exl <= reg_in[1];
                 status_im <= reg_in[15:8];
+                status_bev <= reg_in[22];
             end
         end
     end
@@ -445,21 +447,24 @@ module cp0 #
             exception_now = 1;
         end
     end
-    mux_1h #(.num_port(5), .data_width(32))
+    mux_1h #(.num_port(4), .data_width(32))
            exception_pc_mux(
                .select({
                            eret,
                            refetch,
                            exc_tlb_refill,
-                           exc_int,
-                           exc
+                           exc_int | exc
                        }),
                .in({
                        epc,
                        pc,
-                       32'hBFC0_0200,
-                       32'hBFC0_0380,
-                       32'hBFC0_0380
+                       status_bev ? {
+                           32'h8000_0200,
+                           32'h8000_0380
+                       } : {
+                           32'hBFC0_0200,
+                           32'hBFC0_0380
+                       }
                    }),
                .out(exception_like_now_pc)
            );
