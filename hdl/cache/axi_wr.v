@@ -187,5 +187,5 @@ module axi_wr #
     assign bready = 1;
 
     // sram_to_axi
-    assign wr_idle = state_idle;
+    assign wr_idle = buf_empty;
 endmodule
