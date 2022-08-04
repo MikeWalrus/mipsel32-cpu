@@ -16,7 +16,7 @@ module cp0 #
         parameter D_BYTES_PER_LINE = 16,
         parameter D_NUM_LINE = 256,
 
-        parameter CONFIG_K0 = `UNCACHED
+        parameter CONFIG_K0 = `CACHED
     )
     (
         input clk,

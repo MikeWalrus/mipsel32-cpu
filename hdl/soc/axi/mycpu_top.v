@@ -5,12 +5,14 @@ module mycpu_top #
         //
         parameter I_NUM_WAY = 2,
         // BYTES_PER_LINE * NUM_LINE must <= 4096
-        parameter I_BYTES_PER_LINE = 16,
-        parameter I_NUM_LINE = 128,
-        parameter D_NUM_WAY = 2,
+        parameter I_BYTES_PER_LINE = 64,
+        parameter I_NUM_LINE = 64,
+        parameter D_NUM_WAY = 4,
         // BYTES_PER_LINE * NUM_LINE must <= 4096
-        parameter D_BYTES_PER_LINE = 16,
-        parameter D_NUM_LINE = 128
+        parameter D_BYTES_PER_LINE = 32,
+        parameter D_NUM_LINE = 128,
+
+        parameter TLB = 0
     )
     (
         input aclk,
@@ -108,7 +110,8 @@ module mycpu_top #
                  .I_NUM_LINE(I_NUM_LINE),
                  .D_NUM_WAY(D_NUM_WAY),
                  .D_BYTES_PER_LINE(D_BYTES_PER_LINE),
-                 .D_NUM_LINE(D_NUM_LINE)
+                 .D_NUM_LINE(D_NUM_LINE),
+                 .TLB(TLB)
              )
              cpu_sram
              (
