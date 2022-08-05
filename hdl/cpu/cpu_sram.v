@@ -507,8 +507,8 @@ module cpu_sram #
     wire pre_IF_IF_reg_allow_out;
     wire pre_IF_IF_reg_valid;
 	wire branch_discard;
-	wire branch_flush;
-    wire pre_IF_IF_reg_flush;
+	wire branch_flush = branch_discard;
+	wire pre_IF_IF_reg_flush;
     wire pre_IF_IF_reg_stall_wait_for_data;
     wire pre_IF_IF_reg_stall_discard_instruction;
     wire pre_IF_IF_reg_stall =
@@ -1076,20 +1076,9 @@ module cpu_sram #
 	branch_discard_unit branch_discard_unit(
 		.leaving_IF(leaving_IF),
 		.leaving_ID(leaving_ID),
-		.branch_predict_fail(IF_ID_reg_valid_out & is_branch_branch_predict_ID & (request_miss_ID ? ~static_branch_predict : ~dynamic_branch_predict)),
+		.branch_predict_fail(leaving_ID & is_branch_branch_predict_ID & (request_miss_ID ? ~static_branch_predict : ~dynamic_branch_predict)),
 
 		.branch_discard(branch_discard)
-	);
-
-	branch_flush_unit branch_flush_unit(
-		.clk(clk),
-		.reset(reset),
-
-		.leaving_pre_IF(leaving_pre_IF),
-		.leaving_IF(leaving_IF),
-		.branch_discard(branch_discard),
-
-		.branch_flush(branch_flush)
 	);
 
 	tiny_branch_decode tiny_branch_decode(
@@ -1109,12 +1098,12 @@ module cpu_sram #
 		.clk(clk),
 		.reset(reset),
 
-		.replace_en(replace_en_ID & IF_ID_reg_valid_out),
+		.replace_en(replace_en_ID & leaving_ID),
 		.replace_pc(curr_pc_ID),
 		.replace_pc_target(replace_pc_target),
 		.static_branch_predict(static_branch_predict),
 
-		.fresh_en(fresh_en_ID & IF_ID_reg_valid_out),
+		.fresh_en(fresh_en_ID & leaving_ID),
 		.fresh_line_index(fresh_line_index_ID),
 		.dynamic_branch_predict(dynamic_branch_predict),
 
