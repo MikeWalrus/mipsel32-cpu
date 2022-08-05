@@ -2,7 +2,7 @@
 module cpu_sram #
     (
         // TLB
-        parameter TLB = 1,
+        parameter TLB = 0,
         parameter TLBNUM = 16,
         parameter TLBNUM_WIDTH = $clog2(TLBNUM),
 
@@ -65,6 +65,9 @@ module cpu_sram #
         (* MARK_DEBUG = "TRUE" *)output [4:0] debug_wb_rf_wnum,
         (* MARK_DEBUG = "TRUE" *)output [31:0] debug_wb_rf_wdata
     );
+    initial begin
+    $display("TLB = %d\n\n\n", TLB);
+    end
     wire reset;
     assign reset = ~resetn;
 
@@ -1368,7 +1371,7 @@ module cpu_sram #
                            .exccodes(
                                {
                                    `EXC_Int,
-                                   `EXC_CpU,
+                                   `EXC_RI, // really `EXC_CpU,
                                    `EXC_RI,
                                    `ERET,
                                    `EXC_Sys,

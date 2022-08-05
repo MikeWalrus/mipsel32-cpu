@@ -56,3 +56,7 @@ endif
 	cp --parents -r $(cpu_source) $(headers) $(cache_source) \
 		./hdl/soc/axi/mycpu_top.v \
 		$(TARGET_CPU_DIR)
+ifdef NODEBUG
+	find $(TARGET_CPU_DIR) -type f -name '*.v' \
+		-exec sed -i 's/"TRUE"/"FALSE"/g' '{}' \;
+endif

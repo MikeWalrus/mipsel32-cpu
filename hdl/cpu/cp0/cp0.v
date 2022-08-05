@@ -459,11 +459,11 @@ module cp0 #
                        epc,
                        pc,
                        status_bev ? {
-                           32'h8000_0200,
-                           32'h8000_0380
-                       } : {
                            32'hBFC0_0200,
                            32'hBFC0_0380
+                       } : {
+                           32'h8000_0200,
+                           32'h8000_0380
                        }
                    }),
                .out(exception_like_now_pc)
