@@ -1039,7 +1039,7 @@ module cpu_sram #
                    pre_IF_IF_reg_stall_discard_instruction
                ),
 
-               .IF_ID_reg_valid_out(IF_ID_reg_valid_out),
+			   .leaving_ID(leaving_ID),
 
                .exception_like_now(exception_like_now),
                .exception_like_now_pre_IF(exception_like_now_pre_IF),

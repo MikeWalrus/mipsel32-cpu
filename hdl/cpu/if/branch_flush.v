@@ -15,19 +15,18 @@ module branch_flush_unit (
 	output branch_flush
 );
 
-	wire should_branch_flush = branch_discard;
-	reg branch_flush_reg;
-	always @(posedge clk) begin	
-		if (reset) 
-			branch_flush_reg <= 0;
-		else if (should_branch_flush & leaving_IF)
-			branch_flush_reg <= 0;
-		else if (should_branch_flush & ~leaving_IF)
-			branch_flush_reg <= 1;
-		else if (branch_flush_reg & leaving_pre_IF)
-			branch_flush_reg <= 0;
-	end
+	//wire should_branch_flush = branch_discard;
+	assign branch_flush = branch_discard;
+	// reg branch_flush_reg;
+	// always @(posedge clk) begin	
+	// 	if (reset) 
+	// 		branch_flush_reg <= 0;
+	// 	else if (should_branch_flush)
+	// 		branch_flush_reg <= 1;
+	// 	else if (branch_flush_reg & leaving_pre_IF)
+	// 		branch_flush_reg <= 0;
+	// end
 
-	assign branch_flush = (should_branch_flush & leaving_IF) ? 1'b1 : branch_flush_reg;
+	// assign branch_flush = should_branch_flush ? 1'b1 : branch_flush_reg;
 endmodule
 

@@ -30,7 +30,7 @@ module pre_IF #
         output pre_IF_IF_reg_stall_discard_instruction,
 
         // pipeline register: IF to ID
-        input IF_ID_reg_valid_out,
+        input leaving_ID,
 
         // exception-like events
         input exception_like_now,
@@ -96,7 +96,7 @@ module pre_IF #
         if (reset) begin
             use_target <= 0;
         end
-        if (IF_ID_reg_valid_out & !next_pc_is_next_branch_predict) begin
+        if (leaving_ID & !next_pc_is_next_branch_predict) begin
             target <= next_pc_without_exception;
             if (pre_IF_IF_reg_valid & leaving_pre_IF & ~branch_discard)
                 use_target <= 0; // haven't missed the delay slot
