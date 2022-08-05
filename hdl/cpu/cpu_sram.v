@@ -506,8 +506,6 @@ module cpu_sram #
     wire pre_IF_IF_reg_valid_out;
     wire pre_IF_IF_reg_allow_out;
     wire pre_IF_IF_reg_valid;
-	wire branch_discard;
-	wire branch_flush = branch_discard;
 	wire pre_IF_IF_reg_flush;
     wire pre_IF_IF_reg_stall_wait_for_data;
     wire pre_IF_IF_reg_stall_discard_instruction;
@@ -531,6 +529,8 @@ module cpu_sram #
     wire ID_EX_reg_allow_out;
     wire ID_EX_reg_valid;
     wire ID_EX_reg_flush;
+	wire branch_discard;
+	wire branch_flush = branch_discard;
 
     wire ID_EX_reg_stall_mem_not_ready;
     wire ID_EX_reg_stall_div_not_complete;
@@ -1528,7 +1528,6 @@ module cpu_sram #
     //
     // EX Stage
     //
-
     wire [31:0] alu_result;
     wire overflow;
 

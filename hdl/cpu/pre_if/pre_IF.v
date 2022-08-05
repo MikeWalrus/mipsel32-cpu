@@ -120,19 +120,51 @@ module pre_IF #
     end
 
     wire should_discard_instruction =
-			 (exception_like_now | branch_discard) & (
-             // the address is accepted in pre-IF
-             (inst_sram_req & inst_sram_addr_ok)
-             || // or
-             // IF is waiting for data
-             pre_IF_IF_reg_stall_wait_for_data
-         );
+			 (
+			 	 exception_like_now & 
+				 	 (
+             	 	 	 // the address is accepted in pre-IF
+             		 	 (inst_sram_req & inst_sram_addr_ok)
+             		 	 || // or
+             		 	 // IF is waiting for data
+             		 	 pre_IF_IF_reg_stall_wait_for_data
+		 	 	 	 )
+			 ); 
+
+	reg addr_ok_reg;
+	always @(posedge clk) begin
+		if (reset) begin
+			addr_ok_reg <= 0;
+		end
+		else if (inst_sram_req & inst_sram_addr_ok) begin
+			addr_ok_reg <= 1;
+		end
+		if (addr_ok_reg & inst_sram_data_ok & ~(inst_sram_req & inst_sram_addr_ok)) begin
+			addr_ok_reg <= 0;
+		end
+	end
+	reg discard_instruction_branch_predict;
+	always @(posedge clk) begin
+		if (reset) begin
+			discard_instruction_branch_predict <= 0;
+		end else begin
+			if (branch_discard) begin
+				discard_instruction_branch_predict <= 1;
+			end
+			else if (discard_instruction_branch_predict & inst_sram_data_ok) begin
+				discard_instruction_branch_predict <= 0;
+			end
+			else if (discard_instruction_branch_predict & ~addr_ok_reg) begin
+				discard_instruction_branch_predict <= 0;
+			end
+		end
+	end
 
     reg discard_instruction;
     always @(posedge clk) begin
         if (reset) begin
             discard_instruction <= 0;
-        end begin
+        end else begin
             if (should_discard_instruction) begin
                 discard_instruction <= 1;
             end else if (inst_sram_data_ok) begin
@@ -142,7 +174,7 @@ module pre_IF #
             end
         end
     end
-    assign pre_IF_IF_reg_stall_discard_instruction = discard_instruction;
+    assign pre_IF_IF_reg_stall_discard_instruction = discard_instruction | discard_instruction_branch_predict;
 
     wire inst_addr_error = (curr_pc_pre_IF_req[1:0] != 2'b00);
     wire inst_tlb_error = virt_mapped & ~(found & v);
