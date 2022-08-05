@@ -95,6 +95,7 @@ module axi_wr #
     wire w_to_w    = state_w & ~w_finish;
 
     wire wait_to_idle = state_wait & bvalid;
+    wire wait_to_wait = state_wait & ~bvalid;
 
     wire [STATE_WIDTH-1:0] state_next;
     mux_1h #(.num_port(NUM_STATE), .data_width(STATE_WIDTH)) next_mux
@@ -105,7 +106,7 @@ module axi_wr #
                        idle_to_aw_w | aw_w_to_aw_w,
                        aw_to_aw | aw_w_to_aw,
                        aw_w_to_w | w_to_w,
-                       aw_w_to_wait | aw_to_wait | w_to_wait
+                       aw_w_to_wait | aw_to_wait | w_to_wait | wait_to_wait
                    }),
                .in({
                        IDLE,
