@@ -24,8 +24,8 @@ module branch_table #(
 	always @(posedge clk) begin
 		if (reset) begin
 			for (i = 0; i < LINE_NUM; i = i + 1) begin
-				pc[i] <= {ADDR_WIDTH{1'b0}};
-				pc_target[i] <= {ADDR_WIDTH{1'b0}};
+				pc[i] = {ADDR_WIDTH{1'b0}};
+				pc_target[i] = {ADDR_WIDTH{1'b0}};
 			end
 		end
 		else if (replace_en) begin

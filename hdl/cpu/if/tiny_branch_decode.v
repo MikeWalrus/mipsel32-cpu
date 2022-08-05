@@ -20,6 +20,7 @@ module tiny_branch_decode(
     wire is_blez   = opcode == 6'b000110;
     wire is_bltz   = is_REGIMM && (rt == 5'b00000);
     wire is_bltzal = is_REGIMM && (rt == 5'b10000);
+
 	assign is_branch_branch_predict = is_pre_IF_IF_valid & |{
                is_beq,
                is_bne,
@@ -35,4 +36,5 @@ module tiny_branch_decode(
 			   is_R_type & func_jr
 		   };
 	assign is_jr_branch_predict = is_R_type & (func_jalr | func_jr);
+
 endmodule

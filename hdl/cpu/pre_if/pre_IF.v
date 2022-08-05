@@ -42,7 +42,7 @@ module pre_IF #
         output tlb_refill,
 
         // PC
-		input branch_flush,
+		input branch_discard,
 		input [31:0] next_pc_without_exception_branch_target,
 
         input next_pc_is_next_branch_predict,
@@ -98,7 +98,7 @@ module pre_IF #
         end
         if (IF_ID_reg_valid_out & !next_pc_is_next_branch_predict) begin
             target <= next_pc_without_exception;
-            if (pre_IF_IF_reg_valid & leaving_pre_IF & ~branch_flush)
+            if (pre_IF_IF_reg_valid & leaving_pre_IF & ~branch_discard)
                 use_target <= 0; // haven't missed the delay slot
             else
                 use_target <= 1;
@@ -120,7 +120,7 @@ module pre_IF #
     end
 
     wire should_discard_instruction =
-			 (exception_like_now | branch_flush) & (
+			 (exception_like_now | branch_discard) & (
              // the address is accepted in pre-IF
              (inst_sram_req & inst_sram_addr_ok)
              || // or

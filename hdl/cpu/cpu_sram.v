@@ -70,6 +70,7 @@ module cpu_sram #
         (* MARK_DEBUG = "TRUE" *)output [4:0] debug_wb_rf_wnum,
         (* MARK_DEBUG = "TRUE" *)output [31:0] debug_wb_rf_wdata
     );
+
     wire reset;
     assign reset = ~resetn;
 
@@ -505,6 +506,7 @@ module cpu_sram #
     wire pre_IF_IF_reg_valid_out;
     wire pre_IF_IF_reg_allow_out;
     wire pre_IF_IF_reg_valid;
+	wire branch_discard;
 	wire branch_flush;
     wire pre_IF_IF_reg_flush;
     wire pre_IF_IF_reg_stall_wait_for_data;
@@ -1043,12 +1045,12 @@ module cpu_sram #
                .exception_like_now_pre_IF(exception_like_now_pre_IF),
                .exception_like_now_pc_pre_IF(exception_like_now_pc_pre_IF),
 
-			   .branch_flush(branch_flush),
+			   .branch_discard(branch_discard),
 			   .next_pc_without_exception_branch_target(next_pc_without_exception_branch_target),
 
                .next_pc_is_next_branch_predict(next_pc_is_next_branch_predict),
 
-               .next_pc_without_exception(~next_pc_is_next_branch_predict & next_pc_is_next ? curr_pc_ID + 32'd8 : next_pc_without_exception),
+               .next_pc_without_exception(next_pc_is_next & ~next_pc_is_next_branch_predict ? curr_pc_ID + 32'd8 : next_pc_without_exception),
                .curr_pc_IF(curr_pc_IF),
                .curr_pc_pre_IF(curr_pc_pre_IF),
 
@@ -1071,11 +1073,21 @@ module cpu_sram #
     //
     // IF Stage
     //
-	branch_flush_unit branch_flush_unit(
-		.leaving_pre_IF(leaving_pre_IF),
+	branch_discard_unit branch_discard_unit(
 		.leaving_IF(leaving_IF),
 		.leaving_ID(leaving_ID),
 		.branch_predict_fail(IF_ID_reg_valid_out & is_branch_branch_predict_ID & (request_miss_ID ? ~static_branch_predict : ~dynamic_branch_predict)),
+
+		.branch_discard(branch_discard)
+	);
+
+	branch_flush_unit branch_flush_unit(
+		.clk(clk),
+		.reset(reset),
+
+		.leaving_pre_IF(leaving_pre_IF),
+		.leaving_IF(leaving_IF),
+		.branch_discard(branch_discard),
 
 		.branch_flush(branch_flush)
 	);
