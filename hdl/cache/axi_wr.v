@@ -144,7 +144,7 @@ module axi_wr #
         end else begin
             if (wr_req)
                 buf_empty <= 0;
-            else if (state_next == WAIT)
+            else if (state != WAIT && state_next == WAIT)
                 buf_empty <= 1;
         end
     end
