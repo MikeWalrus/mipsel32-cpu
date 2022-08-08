@@ -16,7 +16,8 @@ module cp0 #
         parameter D_BYTES_PER_LINE = 16,
         parameter D_NUM_LINE = 256,
 
-        parameter CONFIG_K0 = `UNCACHED
+        parameter CONFIG_K0 = `UNCACHED,
+        parameter PRID = 32'h7000
     )
     (
         input clk,
@@ -447,6 +448,8 @@ module cp0 #
                 reg_out = cause;
             `EPC:
                 reg_out = epc;
+            15:
+                reg_out = (sel == 1'b0) ? PRID : 0;
             `BADVADDR:
                 reg_out = badvaddr;
             `COUNT:
