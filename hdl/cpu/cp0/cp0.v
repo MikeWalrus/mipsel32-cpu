@@ -391,6 +391,23 @@ module cp0 #
         end
     end
 
+    reg [8:0] context_ptebase;
+    reg [18:0] context_badvpn2;
+    wire [31:0] context_ = {context_ptebase, context_badvpn2, 4'b0};
+
+    always @(posedge clk) begin
+        if (exception & (
+                    exccode == `EXC_TLBL
+                    | exccode == `EXC_TLBS
+                    | exccode == `EXC_MOD)) begin
+            context_badvpn2 <= tlb_error_vpn2;
+        end else begin
+            if (reg_num == `CONTEXT && wen) begin
+                context_ptebase <= reg_in[31:23];
+            end
+        end
+    end
+
     assign w_index = tlbwr ? random_random : index_index;
     assign w_vpn2 = entry_hi_vpn2;
     assign w_asid = entry_hi_asid;
@@ -416,6 +433,10 @@ module cp0 #
                 reg_out = entry_lo[0];
             `ENTRYLO1:
                 reg_out = entry_lo[1];
+            `CONTEXT:
+                reg_out = context_;
+            `PAGEMASK:
+                reg_out = 0;
             `WIRED:
                 reg_out = wired;
             `ENTRYHI:
@@ -462,8 +483,8 @@ module cp0 #
                            32'hBFC0_0200,
                            32'hBFC0_0380
                        } : {
-                           32'h8000_0200,
-                           32'h8000_0380
+                           32'h8000_0180,
+                           32'h8000_0180
                        }
                    }),
                .out(exception_like_now_pc)
