@@ -23,7 +23,7 @@ module cp0 #
         input clk,
         input reset,
         input [4:0] reg_num,
-        input sel,
+        input [2:0] sel,
         input [31:0] reg_in,
 
         // From WB
@@ -152,6 +152,20 @@ module cp0 #
              config1_ep,
              config1_fp
          };
+
+    wire [31:0] config_012345;
+    mux #(.num_port(6), .data_width(32)) config_mux(
+            .select(sel),
+            .in({
+                    32'b0,
+                    32'b0,
+                    32'b0,
+                    32'b0,
+                    config1,
+                    config_
+                }),
+            .out(config_012345)
+        );
 
     reg status_bev;
     // reg [7:0] status_im;
@@ -449,13 +463,13 @@ module cp0 #
             `EPC:
                 reg_out = epc;
             15:
-                reg_out = (sel == 1'b0) ? PRID : 0;
+                reg_out = (sel == 0) ? PRID : 0;
             `BADVADDR:
                 reg_out = badvaddr;
             `COUNT:
                 reg_out = count;
             `CONFIG:
-                reg_out = (sel == 1'b0) ? config_ : config1;
+                reg_out = config_012345;
             default:
                 reg_out = 0;
         endcase

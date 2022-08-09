@@ -397,17 +397,17 @@ module cpu_sram #
     // cp0
     wire [4:0] cp0_reg_num_ID = rd;
     wire [4:0] cp0_reg_num_WB;
-    wire cp0_reg_sel_ID = func[0];
-    wire cp0_reg_sel_WB;
+    wire [2:0] cp0_reg_sel_ID = func[2:0];
+    wire [2:0] cp0_reg_sel_WB;
 
     wire mtc0_ID;
     wire mtc0_WB;
     wire mfc0_ID;
     wire mfc0_WB;
-    wire [8:0] cp0_signals_ID;
-    wire [8:0] cp0_signals_EX;
-    wire [8:0] cp0_signals_MEM;
-    wire [8:0] cp0_signals_WB;
+    wire [10:0] cp0_signals_ID;
+    wire [10:0] cp0_signals_EX;
+    wire [10:0] cp0_signals_MEM;
+    wire [10:0] cp0_signals_WB;
     assign cp0_signals_ID =
            {
                mtc0_ID,
@@ -424,10 +424,10 @@ module cpu_sram #
             cp0_reg_sel_WB
         } = cp0_signals_WB;
     // NOTE: These indices is related to the order of assignment above.
-    wire mtc0_EX = cp0_signals_EX[8];
-    wire mfc0_EX = cp0_signals_EX[7];
-    wire mtc0_MEM = cp0_signals_MEM[8];
-    wire mfc0_MEM = cp0_signals_MEM[7];
+    wire mtc0_EX = cp0_signals_EX[10];
+    wire mfc0_EX = cp0_signals_EX[9];
+    wire mtc0_MEM = cp0_signals_MEM[10];
+    wire mfc0_MEM = cp0_signals_MEM[9];
     wire exception_like_now;
     wire exception_like_now_pre_IF;
     wire [31:0] exception_like_now_pc;
@@ -690,7 +690,7 @@ module cpu_sram #
     pipeline_reg #(.WIDTH(32 + 32 + 32 + 32 +
                           22 + 8 +
                           5 + 10 + 7 +
-                          9 + 1 + 5 +
+                          11 + 1 + 5 +
                           32 + 1 + 1 +
                           1 + 1 + 1 + 1 +
                           1 +
@@ -737,7 +737,7 @@ module cpu_sram #
     pipeline_reg #(.WIDTH(32 + 8 +
                           32 + 2 +
                           7 + 32 +
-                          9 +
+                          11 +
                           1 + 5 +
                           32 +
                           3 +
@@ -787,7 +787,7 @@ module cpu_sram #
                  );
 
     pipeline_reg #(.WIDTH(
-                       32 + 38 + 32 + 9 + 1 + 5 + 32 +
+                       32 + 38 + 32 + 11 + 1 + 5 + 32 +
                        TLBNUM_WIDTH+1 + 1 + 1 + 1 + 1 + 1 + 19))
                  MEM_WB_reg(
                      .clk(clk),
