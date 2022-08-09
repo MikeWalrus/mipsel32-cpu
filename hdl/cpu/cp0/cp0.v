@@ -16,7 +16,7 @@ module cp0 #
         parameter D_BYTES_PER_LINE = 16,
         parameter D_NUM_LINE = 256,
 
-        parameter CONFIG_K0 = `UNCACHED,
+        parameter CONFIG_K0 = `CACHED,
         parameter PRID = 32'h7000
     )
     (
@@ -157,7 +157,12 @@ module cp0 #
     mux #(.num_port(6), .data_width(32)) config_mux(
             .select(sel),
             .in({
-                    config_, config1, 32'b0, 32'b0, 32'b0, 32'b0
+                    32'b0,
+                    32'b0,
+                    32'b0,
+                    32'b0,
+                    config1,
+                    config_
                 }),
             .out(config_012345)
         );
