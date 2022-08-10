@@ -169,7 +169,7 @@ module axi_wr #
         );
 
     // d cache
-    assign wr_rdy = buf_empty | (state_next == WAIT);
+    assign wr_rdy = buf_empty;
 
     // aw
     assign awvalid = state_aw_w | state_aw;
