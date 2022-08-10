@@ -169,6 +169,7 @@ module cp0 #
 
     parameter [3:0] status_cu = 4'b0001;
     reg status_bev;
+    reg status_um;
     // reg [7:0] status_im;
     // reg status_exl;
     // reg status_ie;
@@ -179,7 +180,10 @@ module cp0 #
              status_bev,
              {6{1'b0}},
              status_im,
-             {6{1'b0}},
+             {3{1'b0}},
+             status_um,
+             1'b0,
+             1'b0,
              status_exl,
              status_ie
          };
@@ -189,6 +193,7 @@ module cp0 #
             status_exl <= 1'b0;
             status_ie <= 1'b0;
             status_bev <= 1'b1;
+            status_um <= 1'b0;
         end else if (eret) begin
             status_exl <= 1'b0;
         end else if (exception) begin
@@ -197,6 +202,7 @@ module cp0 #
             if (wen) begin
                 status_ie <= reg_in[0];
                 status_exl <= reg_in[1];
+                status_um <= reg_in[4];
                 status_im <= reg_in[15:8];
                 status_bev <= reg_in[22];
             end
