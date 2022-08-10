@@ -167,13 +167,15 @@ module cp0 #
             .out(config_012345)
         );
 
+    parameter [3:0] status_cu = 4'b0001;
     reg status_bev;
     // reg [7:0] status_im;
     // reg status_exl;
     // reg status_ie;
     wire [31:0] status =
          {
-             {9{1'b0}},
+             status_cu,
+             {5{1'b0}},
              status_bev,
              {6{1'b0}},
              status_im,
