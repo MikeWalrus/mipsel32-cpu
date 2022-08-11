@@ -121,7 +121,7 @@ module cp0 #
     localparam [2:0] tmp_dl = $clog2(D_BYTES_PER_LINE);
 
     localparam [0:0] config1_m = 1'b1;
-    localparam [5:0] config1_mmu_size_1 = TLBNUM[5:0];
+    localparam [5:0] config1_mmu_size_1 = TLBNUM[5:0] - 6'b1;
     localparam [2:0] config1_is = tmp_is - 3'h6;
     localparam [2:0] config1_il = tmp_il - 3'h1;
     localparam [2:0] config1_ia = I_NUM_WAY - 1;
@@ -167,15 +167,17 @@ module cp0 #
             .out(config_012345)
         );
 
-    parameter [3:0] status_cu = 4'b0001;
+    parameter [2:0] status_cu321 = 3'b000;
+    reg status_cu0;
     reg status_bev;
     reg status_um;
     // reg [7:0] status_im;
     // reg status_exl;
     // reg status_ie;
-    wire [31:0] status =
+    (* MARK_DEBUG = "TRUE" *)wire [31:0] status =
          {
-             status_cu,
+             status_cu321,
+             status_cu0,
              {5{1'b0}},
              status_bev,
              {6{1'b0}},
@@ -194,6 +196,7 @@ module cp0 #
             status_ie <= 1'b0;
             status_bev <= 1'b1;
             status_um <= 1'b0;
+            status_cu0 <= 1'b1;
         end else if (eret) begin
             status_exl <= 1'b0;
         end else if (exception) begin
@@ -205,6 +208,7 @@ module cp0 #
                 status_um <= reg_in[4];
                 status_im <= reg_in[15:8];
                 status_bev <= reg_in[22];
+                status_cu0 <= reg_in[28];
             end
         end
     end
