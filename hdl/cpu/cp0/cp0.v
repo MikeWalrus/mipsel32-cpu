@@ -175,20 +175,20 @@ module cp0 #
     // reg status_exl;
     // reg status_ie;
     (* MARK_DEBUG = "TRUE" *)wire [31:0] status =
-         {
-             status_cu321,
-             status_cu0,
-             {5{1'b0}},
-             status_bev,
-             {6{1'b0}},
-             status_im,
-             {3{1'b0}},
-             status_um,
-             1'b0,
-             1'b0,
-             status_exl,
-             status_ie
-         };
+    {
+        status_cu321,
+        status_cu0,
+        {5{1'b0}},
+        status_bev,
+        {6{1'b0}},
+        status_im,
+        {3{1'b0}},
+        status_um,
+        1'b0,
+        1'b0,
+        status_exl,
+        status_ie
+    };
 
     always @(posedge clk) begin
         if (reset) begin
@@ -277,7 +277,14 @@ module cp0 #
 
     reg [31:0] badvaddr;
     always @(posedge clk) begin
-        if (exception && (exccode == `EXC_AdEL || exccode == `EXC_AdES)) begin
+        if (exception && |{
+                    exccode == `EXC_AdEL,
+                    exccode == `EXC_AdES,
+                    exccode == `EXC_TLBL,
+                    exccode == `EXC_TLBS,
+                    exccode == `EXC_MOD,
+                    tlb_refill
+                }) begin
             badvaddr <= badvaddr_in;
         end
     end
@@ -426,7 +433,8 @@ module cp0 #
         if (exception & (
                     exccode == `EXC_TLBL
                     | exccode == `EXC_TLBS
-                    | exccode == `EXC_MOD)) begin
+                    | exccode == `EXC_MOD
+                    | tlb_refill)) begin
             context_badvpn2 <= tlb_error_vpn2;
         end else begin
             if (reg_num == `CONTEXT && wen) begin
