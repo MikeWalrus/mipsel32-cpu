@@ -420,7 +420,7 @@ module cp0 #
 
     reg [8:0] context_ptebase;
     reg [18:0] context_badvpn2;
-    wire [31:0] context_ = {context_ptebase, context_badvpn2, 4'b0};
+    (* MARK_DEBUG = "TRUE" *)wire [31:0] context_ = {context_ptebase, context_badvpn2, 4'b0};
 
     always @(posedge clk) begin
         if (exception & (

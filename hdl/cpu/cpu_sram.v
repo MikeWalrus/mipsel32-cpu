@@ -1174,7 +1174,7 @@ module cpu_sram #
         if (reset | IF_ID_reg_flush) begin
             is_delay_slot_ID <= 0;
         end else begin
-            if (branch_or_jump_ID) begin
+            if (branch_or_jump_ID & leaving_ID) begin
                 is_delay_slot_ID <= 1;
             end else begin
                 if (is_delay_slot_ID & leaving_ID) begin
