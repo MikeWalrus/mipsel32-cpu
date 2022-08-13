@@ -43,6 +43,9 @@ module pre_IF #
 
         // PC
 		input branch_discard,
+		input branch_flush_in,
+		output branch_flush_out,
+
 		input [31:0] next_pc_without_exception_branch_target,
 
         input next_pc_is_next_branch_predict,
@@ -92,22 +95,73 @@ module pre_IF #
 
     reg [31:0] target;
     reg use_target;
+	reg [31:0] right_target;
+	reg use_right_target;
     always @(posedge clk) begin
         if (reset) begin
             use_target <= 0;
+			use_right_target <= 0;
         end
         if (leaving_ID & !next_pc_is_next_branch_predict) begin
-            target <= next_pc_without_exception;
-            if (pre_IF_IF_reg_valid & leaving_pre_IF & ~branch_discard)
-                use_target <= 0; // haven't missed the delay slot
-            else
-                use_target <= 1;
-        end else begin
+			target <= next_pc_without_exception_branch_target;
+			right_target <= next_pc_without_exception;
+            if (pre_IF_IF_reg_valid & leaving_pre_IF) begin
+                	use_target <= 0; // haven't missed the delay slot
+					if (~branch_discard)
+						use_right_target <= 0;
+					else
+						use_right_target <= 1;
+			end
+            else begin
+				if (pre_IF_IF_reg_valid & ~leaving_pre_IF) begin
+                	use_target <= 1;
+					use_right_target <= 1;
+				end
+				else if (~pre_IF_IF_reg_valid) begin
+					use_target <= 0;
+					use_right_target <= 1;
+				end
+			end
+       end else begin
             if (use_target && !delay_slot_have_missed && leaving_pre_IF) begin
                 use_target <= 0;
             end
+
+			if (use_right_target && !delay_slot_have_missed && !use_target && leaving_pre_IF) begin
+				use_right_target <= 0;
+			end
         end
     end
+
+	reg branch_flush_reg;
+	always @(posedge clk) begin
+		if (reset) begin
+			branch_flush_reg <= 0;
+		end
+		if (exception_like_now) begin
+			branch_flush_reg <= 0;
+		end
+		else begin
+			if (leaving_ID & !next_pc_is_next_branch_predict) begin
+				if (pre_IF_IF_reg_valid & leaving_pre_IF) begin
+					if (~branch_discard)
+						branch_flush_reg <= 0;
+					else
+						branch_flush_reg <= 1;
+				end
+				else begin
+					if (pre_IF_IF_reg_valid & ~leaving_pre_IF)
+						branch_flush_reg <= 1;
+					else
+						branch_flush_reg <= 0;
+				end
+			end else begin
+				if (branch_flush_reg && branch_flush_in)
+					branch_flush_reg <= 0;
+			end
+		end
+	end
+	assign branch_flush_out = branch_flush_reg & ~use_target;
 
     always @(posedge clk) begin
         if (reset) begin
@@ -131,35 +185,6 @@ module pre_IF #
 		 	 	 	 )
 			 ); 
 
-	reg addr_ok_reg;
-	always @(posedge clk) begin
-		if (reset) begin
-			addr_ok_reg <= 0;
-		end
-		else if (inst_sram_req & inst_sram_addr_ok) begin
-			addr_ok_reg <= 1;
-		end
-		if (addr_ok_reg & inst_sram_data_ok & ~(inst_sram_req & inst_sram_addr_ok)) begin
-			addr_ok_reg <= 0;
-		end
-	end
-	reg discard_instruction_branch_predict;
-	always @(posedge clk) begin
-		if (reset) begin
-			discard_instruction_branch_predict <= 0;
-		end else begin
-			if (branch_discard) begin
-				discard_instruction_branch_predict <= 1;
-			end
-			else if (discard_instruction_branch_predict & inst_sram_data_ok) begin
-				discard_instruction_branch_predict <= 0;
-			end
-			else if (discard_instruction_branch_predict & ~addr_ok_reg) begin
-				discard_instruction_branch_predict <= 0;
-			end
-		end
-	end
-
     reg discard_instruction;
     always @(posedge clk) begin
         if (reset) begin
@@ -174,7 +199,7 @@ module pre_IF #
             end
         end
     end
-    assign pre_IF_IF_reg_stall_discard_instruction = discard_instruction | discard_instruction_branch_predict;
+    assign pre_IF_IF_reg_stall_discard_instruction = discard_instruction;
 
     wire inst_addr_error = (curr_pc_pre_IF_req[1:0] != 2'b00);
     wire inst_tlb_error = virt_mapped & ~(found & v);
@@ -192,7 +217,9 @@ module pre_IF #
             curr_pc_pre_IF_req = curr_pc_IF + 4;
         else if (use_target)
             curr_pc_pre_IF_req = target;
-        else
+		else if (use_right_target)
+			curr_pc_pre_IF_req = right_target;
+		else
             curr_pc_pre_IF_req = next_pc_without_exception_branch_target;
     end
 

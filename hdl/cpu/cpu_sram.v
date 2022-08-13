@@ -105,7 +105,7 @@ module cpu_sram #
 	wire [31:0] static_branch_predict_result_IF = (request_miss_IF & is_branch_branch_predict_IF) ? curr_pc_IF + 32'd8 : 32'd0;
 	wire [31:0] static_branch_predict_result_ID;
 
-	wire [31:0] dynamic_branch_predict_result_IF = (~request_miss_IF & is_branch_branch_predict_IF) ? (request_state ? request_pc_target : curr_pc_IF + 32'd4) : 32'd0;
+	wire [31:0] dynamic_branch_predict_result_IF = (~request_miss_IF & is_branch_branch_predict_IF) ? (request_state ? request_pc_target : curr_pc_IF + 32'd8) : 32'd0;
 	wire [31:0] dynamic_branch_predict_result_ID;
 
 	wire replace_en_IF = request_miss_IF & is_branch_branch_predict_IF & ~is_jr_branch_predict;
@@ -530,7 +530,8 @@ module cpu_sram #
     wire ID_EX_reg_valid;
     wire ID_EX_reg_flush;
 	wire branch_discard;
-	wire branch_flush = branch_discard;
+	wire branch_flush;
+	wire should_branch_flush;
 
     wire ID_EX_reg_stall_mem_not_ready;
     wire ID_EX_reg_stall_div_not_complete;
@@ -1046,6 +1047,9 @@ module cpu_sram #
                .exception_like_now_pc_pre_IF(exception_like_now_pc_pre_IF),
 
 			   .branch_discard(branch_discard),
+			   .branch_flush_out(should_branch_flush),
+			   .branch_flush_in(branch_flush),
+
 			   .next_pc_without_exception_branch_target(next_pc_without_exception_branch_target),
 
                .next_pc_is_next_branch_predict(next_pc_is_next_branch_predict),
@@ -1080,6 +1084,7 @@ module cpu_sram #
 
 		.branch_discard(branch_discard)
 	);
+	assign branch_flush = should_branch_flush & pre_IF_IF_reg_valid_out & ~IF_ID_reg_stall & (IF_ID_reg_allow_out | ~IF_ID_reg_valid);
 
 	tiny_branch_decode tiny_branch_decode(
 		.is_pre_IF_IF_valid(pre_IF_IF_reg_valid),
@@ -1863,8 +1868,8 @@ module cpu_sram #
             EX_MEM_reg_flush,
             MEM_WB_reg_flush
         } = {
-			exception_like_now | branch_flush,
 			exception_like_now,
+			exception_like_now | branch_flush,
 			exception_like_now,
 			exception_like_now,
 			exception_like_now
