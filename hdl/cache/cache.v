@@ -62,7 +62,7 @@ module cache #
     wire table_d_write;
     wire [INDEX_WIDTH-1:0] d_index;
     wire [NUM_WAY-1:0] d_way;
-    wire dirty;
+    wire table_dirty;
 
     wire [31:0] table_rdata;
     wire [INDEX_WIDTH-1:0] table_index;
@@ -114,7 +114,7 @@ module cache #
             .d_write(table_d_write),
             .d_way(d_way),
             .d_index(d_index),
-            .dirty(dirty),
+            .dirty(table_dirty),
             .dirty_ways(dirty_ways),
 
             .tag_v_write_way(table_tag_v_write_way),
@@ -294,6 +294,11 @@ module cache #
     end
 
     wire req = valid | cacheop;
+
+    wire dirty = table_dirty |
+         (~write_buf_idle &
+          (write_buf_way == replace_way) &
+          (write_buf_index == req_buf_index));
 
     // IDLE to ...
     wire idle_to_idle   = (state == IDLE) & (~req | write_overlap);
