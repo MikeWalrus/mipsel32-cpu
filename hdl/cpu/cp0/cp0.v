@@ -84,8 +84,7 @@ module cp0 #
         input                        r_v1
     );
     wire eret = exception_like & exccode == `ERET;
-    wire refetch = exception_like & exccode == `REFETCH;
-    wire exception = exception_like & ~eret & ~refetch;
+    wire exception = exception_like & ~eret;
     wire exc_tlb_refill = exception & tlb_refill;
     wire exc_int = exception & exccode == `EXC_Int;
     wire exc = exception & ~exc_tlb_refill & ~exc_int;
@@ -497,25 +496,22 @@ module cp0 #
 
     reg exception_now;
     wire eret_now = eret;
-    wire refetch_now = refetch;
-    assign exception_like_now = exception_now | eret_now | refetch_now;
+    assign exception_like_now = exception_now | eret_now;
     always @(*) begin
         exception_now = 0;
         if (exception & ~status_exl) begin
             exception_now = 1;
         end
     end
-    mux_1h #(.num_port(4), .data_width(32))
+    mux_1h #(.num_port(3), .data_width(32))
            exception_pc_mux(
                .select({
                            eret,
-                           refetch,
                            exc_tlb_refill,
                            exc_int | exc
                        }),
                .in({
                        epc,
-                       pc,
                        status_bev ? {
                            32'hBFC0_0200,
                            32'hBFC0_0380

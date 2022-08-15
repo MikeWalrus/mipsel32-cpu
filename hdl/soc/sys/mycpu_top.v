@@ -3,11 +3,11 @@ module mycpu_top #
         //
         // These parameters are the source of truth.
         //
-        parameter I_NUM_WAY = 2,
+        parameter I_NUM_WAY = 1,
         // BYTES_PER_LINE * NUM_LINE must <= 4096
         parameter I_BYTES_PER_LINE = 16,
         parameter I_NUM_LINE = 128,
-        parameter D_NUM_WAY = 2,
+        parameter D_NUM_WAY = 1,
         // BYTES_PER_LINE * NUM_LINE must <= 4096
         parameter D_BYTES_PER_LINE = 16,
         parameter D_NUM_LINE = 128

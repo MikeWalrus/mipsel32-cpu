@@ -1,263 +1,370 @@
-/*------------------------------------------------------------------------------
---------------------------------------------------------------------------------
-Copyright (c) 2016, Loongson Technology Corporation Limited.
- 
-All rights reserved.
- 
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
- 
-1. Redistributions of source code must retain the above copyright notice, this 
-list of conditions and the following disclaimer.
- 
-2. Redistributions in binary form must reproduce the above copyright notice, 
-this list of conditions and the following disclaimer in the documentation and/or
-other materials provided with the distribution.
- 
-3. Neither the name of Loongson Technology Corporation Limited nor the names of 
-its contributors may be used to endorse or promote products derived from this 
-software without specific prior written permission.
- 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
-DISCLAIMED. IN NO EVENT SHALL LOONGSON TECHNOLOGY CORPORATION LIMITED BE LIABLE
-TO ANY PARTY FOR DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE 
-GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) 
-HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT 
-LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
-THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
---------------------------------------------------------------------------------
-------------------------------------------------------------------------------*/
-`timescale 1ns / 1ps
-
-`define TRACE_REF_FILE "golden_trace.txt"
-`define CONFREG_NUM_REG      soc_lite.u_confreg.num_data
-`define CONFREG_OPEN_TRACE   soc_lite.u_confreg.open_trace
-`define CONFREG_NUM_MONITOR  soc_lite.u_confreg.num_monitor
-`define CONFREG_UART_DISPLAY soc_lite.u_confreg.write_uart_valid
-`define CONFREG_UART_DATA    soc_lite.u_confreg.write_uart_data
-`define END_PC 32'hbfc00100
-
 module tb_top(
-`ifdef VERILATOR
-    input clk,
-    input resetn
-`endif
-);
-`ifndef VERILATOR
-    reg resetn;
-    reg clk;
-`endif
+        input clk,
+        input resetn,
+        output [31:0] wb_pc,
+        output uart_out,
+        output [7:0] uart_char
+    );
+    //cpu axi
+    wire [3 :0] cpu_arid   ;
+    wire [31:0] cpu_araddr ;
+    wire [7 :0] cpu_arlen  ;
+    wire [2 :0] cpu_arsize ;
+    wire [1 :0] cpu_arburst;
+    wire [1 :0] cpu_arlock ;
+    wire [3 :0] cpu_arcache;
+    wire [2 :0] cpu_arprot ;
+    wire        cpu_arvalid;
+    wire        cpu_arready;
+    wire [3 :0] cpu_rid    ;
+    wire [31:0] cpu_rdata  ;
+    wire [1 :0] cpu_rresp  ;
+    wire        cpu_rlast  ;
+    wire        cpu_rvalid ;
+    wire        cpu_rready ;
+    wire [3 :0] cpu_awid   ;
+    wire [31:0] cpu_awaddr ;
+    wire [7 :0] cpu_awlen  ;
+    wire [2 :0] cpu_awsize ;
+    wire [1 :0] cpu_awburst;
+    wire [1 :0] cpu_awlock ;
+    wire [3 :0] cpu_awcache;
+    wire [2 :0] cpu_awprot ;
+    wire        cpu_awvalid;
+    wire        cpu_awready;
+    wire [3 :0] cpu_wid    ;
+    wire [31:0] cpu_wdata  ;
+    wire [3 :0] cpu_wstrb  ;
+    wire        cpu_wlast  ;
+    wire        cpu_wvalid ;
+    wire        cpu_wready ;
+    wire [3 :0] cpu_bid    ;
+    wire [1 :0] cpu_bresp  ;
+    wire        cpu_bvalid ;
+    wire        cpu_bready ;
 
-    //goio
-    wire [15:0] led;
-    wire [1 :0] led_rg0;
-    wire [1 :0] led_rg1;
-    wire [7 :0] num_csn;
-    wire [6 :0] num_a_g;
-    wire [7 :0] switch;
-    wire [3 :0] btn_key_col;
-    wire [3 :0] btn_key_row;
-    wire [1 :0] btn_step;
-    assign switch      = 8'hff;
-    assign btn_key_row = 4'd0;
-    assign btn_step    = 2'd3;
+    //ram axi
+    wire [3 :0] ram_arid   ;
+    wire [31:0] ram_araddr ;
+    wire [7 :0] ram_arlen  ;
+    wire [2 :0] ram_arsize ;
+    wire [1 :0] ram_arburst;
+    wire [1 :0] ram_arlock ;
+    wire [3 :0] ram_arcache;
+    wire [2 :0] ram_arprot ;
+    wire        ram_arvalid;
+    wire        ram_arready;
+    wire [3 :0] ram_rid    ;
+    wire [31:0] ram_rdata  ;
+    wire [1 :0] ram_rresp  ;
+    wire        ram_rlast  ;
+    wire        ram_rvalid ;
+    wire        ram_rready ;
+    wire [3 :0] ram_awid   ;
+    wire [31:0] ram_awaddr ;
+    wire [7 :0] ram_awlen  ;
+    wire [2 :0] ram_awsize ;
+    wire [1 :0] ram_awburst;
+    wire [1 :0] ram_awlock ;
+    wire [3 :0] ram_awcache;
+    wire [2 :0] ram_awprot ;
+    wire        ram_awvalid;
+    wire        ram_awready;
+    wire [3 :0] ram_wid    ;
+    wire [31:0] ram_wdata  ;
+    wire [3 :0] ram_wstrb  ;
+    wire        ram_wlast  ;
+    wire        ram_wvalid ;
+    wire        ram_wready ;
+    wire [3 :0] ram_bid    ;
+    wire [1 :0] ram_bresp  ;
+    wire        ram_bvalid ;
+    wire        ram_bready ;
 
+    //uart axi
+    wire [3 :0] uart_arid   ;
+    wire [31:0] uart_araddr ;
+    wire [7 :0] uart_arlen  ;
+    wire [2 :0] uart_arsize ;
+    wire [1 :0] uart_arburst;
+    wire [1 :0] uart_arlock ;
+    wire [3 :0] uart_arcache;
+    wire [2 :0] uart_arprot ;
+    wire        uart_arvalid;
+    wire        uart_arready;
+    wire [3 :0] uart_rid    ;
+    wire [31:0] uart_rdata  ;
+    wire [1 :0] uart_rresp  ;
+    wire        uart_rlast  ;
+    wire        uart_rvalid ;
+    wire        uart_rready ;
+    wire [3 :0] uart_awid   ;
+    wire [31:0] uart_awaddr ;
+    wire [7 :0] uart_awlen  ;
+    wire [2 :0] uart_awsize ;
+    wire [1 :0] uart_awburst;
+    wire [1 :0] uart_awlock ;
+    wire [3 :0] uart_awcache;
+    wire [2 :0] uart_awprot ;
+    wire        uart_awvalid;
+    wire        uart_awready;
+    wire [3 :0] uart_wid    ;
+    wire [31:0] uart_wdata  ;
+    wire [3 :0] uart_wstrb  ;
+    wire        uart_wlast  ;
+    wire        uart_wvalid ;
+    wire        uart_wready ;
+    wire [3 :0] uart_bid    ;
+    wire [1 :0] uart_bresp  ;
+    wire        uart_bvalid ;
+    wire        uart_bready ;
+
+    mycpu_top cpu(
+                  .ext_int   (6'd0          ),   //high active
+
+                  .aclk      (clk       ),
+                  .aresetn   (resetn    ),   //low active
+
+                  .arid      (cpu_arid      ),
+                  .araddr    (cpu_araddr    ),
+                  .arlen     (cpu_arlen     ),
+                  .arsize    (cpu_arsize    ),
+                  .arburst   (cpu_arburst   ),
+                  .arlock    (cpu_arlock    ),
+                  .arcache   (cpu_arcache   ),
+                  .arprot    (cpu_arprot    ),
+                  .arvalid   (cpu_arvalid   ),
+                  .arready   (cpu_arready   ),
+
+                  .rid       (cpu_rid       ),
+                  .rdata     (cpu_rdata     ),
+                  .rresp     (cpu_rresp     ),
+                  .rlast     (cpu_rlast     ),
+                  .rvalid    (cpu_rvalid    ),
+                  .rready    (cpu_rready    ),
+
+                  .awid      (cpu_awid      ),
+                  .awaddr    (cpu_awaddr    ),
+                  .awlen     (cpu_awlen     ),
+                  .awsize    (cpu_awsize    ),
+                  .awburst   (cpu_awburst   ),
+                  .awlock    (cpu_awlock    ),
+                  .awcache   (cpu_awcache   ),
+                  .awprot    (cpu_awprot    ),
+                  .awvalid   (cpu_awvalid   ),
+                  .awready   (cpu_awready   ),
+
+                  .wid       (cpu_wid       ),
+                  .wdata     (cpu_wdata     ),
+                  .wstrb     (cpu_wstrb     ),
+                  .wlast     (cpu_wlast     ),
+                  .wvalid    (cpu_wvalid    ),
+                  .wready    (cpu_wready    ),
+
+                  .bid       (cpu_bid       ),
+                  .bresp     (cpu_bresp     ),
+                  .bvalid    (cpu_bvalid    ),
+                  .bready    (cpu_bready    ),
+                  .debug_wb_pc(wb_pc)
+              );
+
+    axi_crossbar #
+        (
+            .M_COUNT(2),
+            .S_COUNT(1),
+            .S_ID_WIDTH(4),
+            .M_REGIONS(1),
+            .M_BASE_ADDR({
+                             64'h1fe41000_00000000
+                         }),
+            .M_ADDR_WIDTH({
+                              32'd12, 32'd27
+                          })
+        ) axi_crossbar (
+            .clk              ( clk     ),
+            .rst            ( ~resetn   ),
+
+            .s_axi_arid(cpu_arid),
+            .s_axi_araddr(cpu_araddr),
+            .s_axi_arlen(cpu_arlen),
+            .s_axi_arsize(cpu_arsize),
+            .s_axi_arburst(cpu_arburst),
+            .s_axi_arlock(1'b0),
+            .s_axi_arcache(cpu_arcache),
+            .s_axi_arprot(cpu_arprot),
+            .s_axi_arvalid(cpu_arvalid),
+            .s_axi_arready(cpu_arready),
+            .s_axi_rid(cpu_rid),
+            .s_axi_rdata(cpu_rdata),
+            .s_axi_rresp(cpu_rresp),
+            .s_axi_rlast(cpu_rlast),
+            .s_axi_rvalid(cpu_rvalid),
+            .s_axi_rready(cpu_rready),
+            .s_axi_awid(cpu_awid),
+            .s_axi_awaddr(cpu_awaddr),
+            .s_axi_awlen(cpu_awlen),
+            .s_axi_awsize(cpu_awsize),
+            .s_axi_awburst(cpu_awburst),
+            .s_axi_awlock(0),
+            .s_axi_awcache(cpu_awcache),
+            .s_axi_awprot(cpu_awprot),
+            .s_axi_awvalid(cpu_awvalid),
+            .s_axi_awready(cpu_awready),
+            .s_axi_wdata(cpu_wdata),
+            .s_axi_wstrb(cpu_wstrb),
+            .s_axi_wlast(cpu_wlast),
+            .s_axi_wvalid(cpu_wvalid),
+            .s_axi_wready(cpu_wready),
+            .s_axi_bid(cpu_bid),
+            .s_axi_bresp(cpu_bresp),
+            .s_axi_bvalid(cpu_bvalid),
+            .s_axi_bready(cpu_bready),
+
+            .m_axi_arid({uart_arid, ram_arid}),
+            .m_axi_araddr({uart_araddr, ram_araddr}),
+            .m_axi_arlen({uart_arlen, ram_arlen}),
+            .m_axi_arsize({uart_arsize, ram_arsize}),
+            .m_axi_arburst({uart_arburst, ram_arburst}),
+            .m_axi_arlock(),
+            .m_axi_arcache({uart_arcache, ram_arcache}),
+            .m_axi_arprot({uart_arprot, ram_arprot}),
+            .m_axi_arvalid({uart_arvalid, ram_arvalid}),
+            .m_axi_arready({uart_arready, ram_arready}),
+            .m_axi_rid({uart_rid, ram_rid}),
+            .m_axi_rdata({uart_rdata, ram_rdata}),
+            .m_axi_rresp({uart_rresp, ram_rresp}),
+            .m_axi_rlast({uart_rlast, ram_rlast}),
+            .m_axi_rvalid({uart_rvalid, ram_rvalid}),
+            .m_axi_rready({uart_rready, ram_rready}),
+            .m_axi_awid({uart_awid, ram_awid}),
+            .m_axi_awaddr({uart_awaddr, ram_awaddr}),
+            .m_axi_awlen({uart_awlen, ram_awlen}),
+            .m_axi_awsize({uart_awsize, ram_awsize}),
+            .m_axi_awburst({uart_awburst, ram_awburst}),
+            .m_axi_awlock(),
+            .m_axi_awcache({uart_awcache, ram_awcache}),
+            .m_axi_awprot({uart_awprot, ram_awprot}),
+            .m_axi_awvalid({uart_awvalid, ram_awvalid}),
+            .m_axi_awready({uart_awready, ram_awready}),
+            .m_axi_wdata({uart_wdata, ram_wdata}),
+            .m_axi_wstrb({uart_wstrb, ram_wstrb}),
+            .m_axi_wlast({uart_wlast, ram_wlast}),
+            .m_axi_wvalid({uart_wvalid, ram_wvalid}),
+            .m_axi_wready({uart_wready, ram_wready}),
+            .m_axi_bid({uart_bid, ram_bid}),
+            .m_axi_bresp({uart_bresp, ram_bresp}),
+            .m_axi_bvalid({uart_bvalid, ram_bvalid}),
+            .m_axi_bready({uart_bready, ram_bready})
+        );
+
+    axi_ram
+        #(
+            .DATA_WIDTH(32),
+            .ADDR_WIDTH(27),
+            .ID_WIDTH(4),
+            .INITIALISE(0)
+        )
+        ram(
+            .clk            (clk),
+            .rst            (~resetn),
+            .s_axi_awlock(1'b0),
+            .s_axi_awcache(4'b0),
+            .s_axi_awprot(3'b0),
+            .s_axi_arlock(1'b0),
+            .s_axi_arcache(4'b0),
+            .s_axi_arprot(3'b0),
+            //ar
+            .s_axi_arid     (ram_arid     ),
+            .s_axi_araddr   (ram_araddr   ),
+            .s_axi_arlen    (ram_arlen    ),
+            .s_axi_arsize   (ram_arsize   ),
+            .s_axi_arburst  (ram_arburst  ),
+            .s_axi_arvalid  (ram_arvalid  ),
+            .s_axi_arready  (ram_arready  ),
+            //r
+            .s_axi_rid      (ram_rid      ),
+            .s_axi_rdata    (ram_rdata    ),
+            .s_axi_rresp    (ram_rresp    ),
+            .s_axi_rlast    (ram_rlast    ),
+            .s_axi_rvalid   (ram_rvalid   ),
+            .s_axi_rready   (ram_rready   ),
+            //aw
+            .s_axi_awid     (ram_awid     ),
+            .s_axi_awaddr   (ram_awaddr   ),
+            .s_axi_awlen    (ram_awlen    ),
+            .s_axi_awsize   (ram_awsize   ),
+            .s_axi_awburst  (ram_awburst  ),
+            .s_axi_awvalid  (ram_awvalid  ),
+            .s_axi_awready  (ram_awready  ),
+            //w
+            .s_axi_wdata    (ram_wdata    ),
+            .s_axi_wstrb    (ram_wstrb    ),
+            .s_axi_wlast    (ram_wlast    ),
+            .s_axi_wvalid   (ram_wvalid   ),
+            .s_axi_wready   (ram_wready   ),
+            //b
+            .s_axi_bid      (ram_bid      ),
+            .s_axi_bresp    (ram_bresp    ),
+            .s_axi_bvalid   (ram_bvalid   ),
+            .s_axi_bready   (ram_bready   )
+        );
+
+    axi_ram
+        #(
+            .DATA_WIDTH(32),
+            .ADDR_WIDTH(12),
+            .ID_WIDTH(4),
+            .INITIALISE(0)
+        )
+        uart_fake(
+            .clk            (clk),
+            .rst            (~resetn),
+            .s_axi_awlock(1'b0),
+            .s_axi_awcache(4'b0),
+            .s_axi_awprot(3'b0),
+            .s_axi_arlock(1'b0),
+            .s_axi_arcache(4'b0),
+            .s_axi_arprot(3'b0),
+            //ar
+            .s_axi_arid     (uart_arid     ),
+            .s_axi_araddr   (uart_araddr   ),
+            .s_axi_arlen    (uart_arlen    ),
+            .s_axi_arsize   (uart_arsize   ),
+            .s_axi_arburst  (uart_arburst  ),
+            .s_axi_arvalid  (uart_arvalid  ),
+            .s_axi_arready  (uart_arready  ),
+            //r
+            .s_axi_rid      (uart_rid      ),
+            .s_axi_rdata    (uart_rdata    ),
+            .s_axi_rresp    (uart_rresp    ),
+            .s_axi_rlast    (uart_rlast    ),
+            .s_axi_rvalid   (uart_rvalid   ),
+            .s_axi_rready   (uart_rready   ),
+            //aw
+            .s_axi_awid     (uart_awid     ),
+            .s_axi_awaddr   (uart_awaddr   ),
+            .s_axi_awlen    (uart_awlen    ),
+            .s_axi_awsize   (uart_awsize   ),
+            .s_axi_awburst  (uart_awburst  ),
+            .s_axi_awvalid  (uart_awvalid  ),
+            .s_axi_awready  (uart_awready  ),
+            //w
+            .s_axi_wdata    (uart_wdata    ),
+            .s_axi_wstrb    (uart_wstrb    ),
+            .s_axi_wlast    (uart_wlast    ),
+            .s_axi_wvalid   (uart_wvalid   ),
+            .s_axi_wready   (uart_wready   ),
+            //b
+            .s_axi_bid      (uart_bid      ),
+            .s_axi_bresp    (uart_bresp    ),
+            .s_axi_bvalid   (uart_bvalid   ),
+            .s_axi_bready   (uart_bready   )
+        );
+    assign uart_out = uart_wvalid & uart_wready;
+    assign uart_char = uart_wdata[7:0];
     initial begin
-`ifdef VERILATOR
-        $dumpfile("dump.vcd");
-`endif
-        $dumpvars();
-    end
-
-`ifndef VERILATOR
-    initial begin
-        clk = 1'b0;
-        resetn = 1'b0;
-        #2000;
-        resetn = 1'b1;
-    end
-    always #5 clk=~clk;
-`endif
-    soc_axi_lite_top #(.SIMULATION(1'b1)) soc_lite
-                      (
-                          .resetn      (resetn     ),
-                          .clk         (clk        ),
-
-                          //------gpio-------
-                          .num_csn    (num_csn    ),
-                          .num_a_g    (num_a_g    ),
-                          .led        (led        ),
-                          .led_rg0    (led_rg0    ),
-                          .led_rg1    (led_rg1    ),
-                          .switch     (switch     ),
-                          .btn_key_col(btn_key_col),
-                          .btn_key_row(btn_key_row),
-                          .btn_step   (btn_step   )
-                      );
-
-    //soc lite signals
-    //"soc_clk" means clk in cpu
-    //"wb" means write-back stage in pipeline
-    //"rf" means regfiles in cpu
-    //"w" in "wen/wnum/wdata" means writing
-    wire soc_clk;
-    wire [31:0] debug_wb_pc;
-    wire [3 :0] debug_wb_rf_wen;
-    wire [4 :0] debug_wb_rf_wnum;
-    wire [31:0] debug_wb_rf_wdata;
-    assign soc_clk           = soc_lite.cpu_clk;
-    assign debug_wb_pc       = soc_lite.debug_wb_pc;
-    assign debug_wb_rf_wen   = soc_lite.debug_wb_rf_wen;
-    assign debug_wb_rf_wnum  = soc_lite.debug_wb_rf_wnum;
-    assign debug_wb_rf_wdata = soc_lite.debug_wb_rf_wdata;
-
-    // open the trace file;
-    integer trace_ref;
-    initial begin
-        trace_ref = $fopen(`TRACE_REF_FILE, "r");
-    end
-
-    // intialise the rams
-    initial begin
-        $readmemb("inst_ram.mif", soc_lite.u_axi_ram.ram.mem);
-    end
-
-    //get reference result in falling edge
-    reg        trace_cmp_flag;
-    reg        debug_end;
-
-    reg [31:0] ref_wb_pc;
-    reg [4 :0] ref_wb_rf_wnum;
-    reg [31:0] ref_wb_rf_wdata;
-    integer a;
-    always @(negedge soc_clk)begin
-        if(|debug_wb_rf_wen && debug_wb_rf_wnum!=5'd0 && !debug_end && `CONFREG_OPEN_TRACE)begin
-            trace_cmp_flag=1'b0;
-            while (!trace_cmp_flag && !($feof(trace_ref)))begin
-                a = $fscanf(trace_ref, "%h %h %h %h", trace_cmp_flag, ref_wb_pc, ref_wb_rf_wnum, ref_wb_rf_wdata);
-            end
-        end
-    end
-
-    //wdata[i*8+7 : i*8] is valid, only wehile wen[i] is valid
-    wire [31:0] debug_wb_rf_wdata_v;
-    wire [31:0] ref_wb_rf_wdata_v;
-    assign debug_wb_rf_wdata_v[31:24] = debug_wb_rf_wdata[31:24] & {8{debug_wb_rf_wen[3]}};
-    assign debug_wb_rf_wdata_v[23:16] = debug_wb_rf_wdata[23:16] & {8{debug_wb_rf_wen[2]}};
-    assign debug_wb_rf_wdata_v[15: 8] = debug_wb_rf_wdata[15: 8] & {8{debug_wb_rf_wen[1]}};
-    assign debug_wb_rf_wdata_v[7 : 0] = debug_wb_rf_wdata[7 : 0] & {8{debug_wb_rf_wen[0]}};
-    assign   ref_wb_rf_wdata_v[31:24] =   ref_wb_rf_wdata[31:24] & {8{debug_wb_rf_wen[3]}};
-    assign   ref_wb_rf_wdata_v[23:16] =   ref_wb_rf_wdata[23:16] & {8{debug_wb_rf_wen[2]}};
-    assign   ref_wb_rf_wdata_v[15: 8] =   ref_wb_rf_wdata[15: 8] & {8{debug_wb_rf_wen[1]}};
-    assign   ref_wb_rf_wdata_v[7 : 0] =   ref_wb_rf_wdata[7 : 0] & {8{debug_wb_rf_wen[0]}};
-
-
-    //compare result in rsing edge
-    reg debug_wb_err;
-    always @(posedge soc_clk)begin
-        if(!resetn)begin
-            debug_wb_err <= 1'b0;
-        end
-`ifndef NOTRACE
-        else if(|debug_wb_rf_wen && debug_wb_rf_wnum!=5'd0 && !debug_end && `CONFREG_OPEN_TRACE)begin
-            if (  (debug_wb_pc!==ref_wb_pc) || (debug_wb_rf_wnum!==ref_wb_rf_wnum)
-                    ||(debug_wb_rf_wdata_v!==ref_wb_rf_wdata_v) )begin
-                $display("--------------------------------------------------------------");
-                $display("[%t] Error!!!",$time);
-                $display("    reference: PC = 0x%8h, wb_rf_wnum = 0x%2h, wb_rf_wdata = 0x%8h",
-                         ref_wb_pc, ref_wb_rf_wnum, ref_wb_rf_wdata_v);
-                $display("    mycpu    : PC = 0x%8h, wb_rf_wnum = 0x%2h, wb_rf_wdata = 0x%8h",
-                         debug_wb_pc, debug_wb_rf_wnum, debug_wb_rf_wdata_v);
-                $display("--------------------------------------------------------------");
-                debug_wb_err <= 1'b1;
-                #40;
-                $finish;
-            end
-        end
-`endif
-    end
-
-    //monitor numeric display
-    reg [7:0] err_count;
-    wire [31:0] confreg_num_reg = `CONFREG_NUM_REG;
-    reg  [31:0] confreg_num_reg_r;
-    always @(posedge soc_clk)begin
-        confreg_num_reg_r <= confreg_num_reg;
-        if (!resetn)begin
-            err_count <= 8'd0;
-        end
-        else if (confreg_num_reg_r != confreg_num_reg && `CONFREG_NUM_MONITOR)begin
-            if(confreg_num_reg[7:0]!=confreg_num_reg_r[7:0]+1'b1)begin
-                $display("--------------------------------------------------------------");
-                $display("[%t] Error(%d)!!! Occurred in number 8'd%02d Functional Test Point!",$time, err_count, confreg_num_reg[31:24]);
-                $display("--------------------------------------------------------------");
-                err_count <= err_count + 1'b1;
-            end
-            else if(confreg_num_reg[31:24]!=confreg_num_reg_r[31:24]+1'b1)begin
-                $display("--------------------------------------------------------------");
-                $display("[%t] Error(%d)!!! Unknown, Functional Test Point numbers are unequal!",$time,err_count);
-                $display("--------------------------------------------------------------");
-                $display("==============================================================");
-                err_count <= err_count + 1'b1;
-            end
-            else begin
-                $display("----[%t] Number 8'd%02d Functional Test Point PASS!!!", $time, confreg_num_reg[31:24]);
-            end
-        end
-    end
-
-    //monitor test
-    initial begin
-        $timeformat(-9,0," ns",10);
-        /* while(!resetn) */
-            /* #5; */
-        $display("==============================================================");
-        $display("Test begin!");
-
-        #10000;
-        while(`CONFREG_NUM_MONITOR)begin
-            #10000;
-            $display ("        [%t] Test is running, debug_wb_pc = 0x%8h",$time, debug_wb_pc);
-        end
-    end
-
-    //模拟串口打印
-    wire uart_display;
-    wire [7:0] uart_data;
-    assign uart_display = `CONFREG_UART_DISPLAY;
-    assign uart_data    = `CONFREG_UART_DATA;
-
-    always @(posedge soc_clk)begin
-        if(uart_display)begin
-            if(uart_data!=8'hff)begin
-                $write("%c",uart_data);
-            end
-        end
-    end
-
-    //test end
-    wire global_err = debug_wb_err || (err_count!=8'd0);
-    wire test_end = (debug_wb_pc==`END_PC) || (uart_display && uart_data==8'hff);
-    always @(posedge soc_clk)begin
-        if (!resetn)begin
-            debug_end <= 1'b0;
-        end
-        else if(test_end && !debug_end)begin
-            debug_end <= 1'b1;
-            $display("==============================================================");
-            $display("Test end!");
-            #40;
-            $fclose(trace_ref);
-            if (global_err)begin
-                $display("Fail!!!Total %d errors!",err_count);
-            end
-            else begin
-                $display("----PASS!!!");
-            end
-            $finish;
-        end
+        $readmemh("ram.mif", ram.mem);
+        $readmemh("uart_fake.mif", uart_fake.mem);
+        $readmemh("reg.mif", cpu.cpu_sram.regfile.registers);
     end
 endmodule

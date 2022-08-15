@@ -14,7 +14,9 @@ module cpu_sram #
         parameter D_NUM_WAY = 2,
         // BYTES_PER_LINE * NUM_LINE must <= 4096
         parameter D_BYTES_PER_LINE = 16,
-        parameter D_NUM_LINE = 256
+        parameter D_NUM_LINE = 256,
+
+        parameter START_PC = 32'hBFC0_0000
     )
     (
         input clk,
@@ -622,7 +624,7 @@ module cpu_sram #
         #(
             .WIDTH(32 + 1 + 5 + 1 + 19),
             .RESET(1),
-            .RESET_VALUE({32'hBFC0_0000 - 32'h4, 7'bxxxxxxx, 19'HXXX})
+            .RESET_VALUE({START_PC - 32'h4, 7'bxxxxxxx, 19'HXXX})
         )
         pre_IF_IF_reg(
             .clk(clk),
@@ -1060,20 +1062,23 @@ module cpu_sram #
 
     assign badvaddr_IF = curr_pc_IF;
 
-    exception_combine
-        refetch_as_exception(
-            .exception_h(exception_IF_old),
-            .exccode_h(exccode_IF_old),
-            .exception_l(
-                |{cacheop_i_ID, mtc0_ID, tlbwi_ID, tlbr_ID} & IF_ID_reg_valid
-                | |{cacheop_i_EX, mtc0_EX, tlbwi_EX, tlbr_EX} & ID_EX_reg_valid
-                | |{mtc0_MEM, tlbwi_MEM, tlbr_MEM} & EX_MEM_reg_valid
-                | |{mtc0_WB, tlbwi_WB, tlbr_WB} & MEM_WB_reg_valid
-            ),
-            .exccode_l(`REFETCH),
-            .exception_out(exception_IF),
-            .exccode_out(exccode_IF)
-        );
+    assign exception_IF = exception_IF_old;
+    assign exccode_IF = exccode_IF_old;
+    /* exception_combine */
+    /*     refetch_as_exception( */
+    /*         .exception_h(exception_IF_old), */
+    /*         .exccode_h(exccode_IF_old), */
+    /*         .exception_l( */
+    /*         0 */
+    /*             /1* |{cacheop_i_ID, mtc0_ID, tlbwi_ID, tlbr_ID} & IF_ID_reg_valid *1/ */
+    /*             /1* | |{cacheop_i_EX, mtc0_EX, tlbwi_EX, tlbr_EX} & ID_EX_reg_valid *1/ */
+    /*             /1* | |{mtc0_MEM, tlbwi_MEM, tlbr_MEM} & EX_MEM_reg_valid *1/ */
+    /*             /1* | |{mtc0_WB, tlbwi_WB, tlbr_WB} & MEM_WB_reg_valid *1/ */
+    /*         ), */
+    /*         .exccode_l(`REFETCH), */
+    /*         .exception_out(exception_IF), */
+    /*         .exccode_out(exccode_IF) */
+    /*     ); */
 
 
     //
