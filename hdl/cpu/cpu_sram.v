@@ -897,6 +897,7 @@ module cpu_sram #
         // search port 0
         tlb #(.TLBNUM(TLBNUM)) tlb(
                 .clk(clk),
+                .reset(reset),
 
                 .s0_vpn2(s0_vpn2),
                 .s0_odd_page(s0_odd_page),
