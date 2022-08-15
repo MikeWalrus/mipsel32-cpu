@@ -1034,7 +1034,7 @@ module cpu_sram #
     reg [31:0] instruction_latched;
     reg instruction_latched_valid;
     always @(posedge clk) begin
-        if (reset)
+        if (reset || IF_ID_reg_flush)
             instruction_latched_valid <= 0;
         else if (pre_IF_IF_reg_valid & inst_sram_data_ok) begin
             if (!pre_IF_IF_reg_allow_out) begin

@@ -16,7 +16,7 @@ module mycpu_top #
         input aclk,
         input aresetn,
 
-        input [5:0] ext_int,
+        (* MARK_DEBUG = "TRUE" *)input [5:0] ext_int,
 
         output [3:0] arid,
         output [31:0] araddr,
@@ -108,7 +108,9 @@ module mycpu_top #
                  .I_NUM_LINE(I_NUM_LINE),
                  .D_NUM_WAY(D_NUM_WAY),
                  .D_BYTES_PER_LINE(D_BYTES_PER_LINE),
-                 .D_NUM_LINE(D_NUM_LINE)
+                 .D_NUM_LINE(D_NUM_LINE),
+                 .TLB(1),
+                 .TLBNUM(4)
              )
              cpu_sram
              (

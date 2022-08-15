@@ -407,6 +407,16 @@ module cp0 #
         end
     end
 
+    localparam LFSR_WIDTH = 3;
+    wire [LFSR_WIDTH-1:0] lfsr_out;
+    lfsr #(.WIDTH(LFSR_WIDTH)) lfsr(
+             .clk(clk),
+             .reset(reset),
+             .en(1),
+             .seed(1),
+             .out(lfsr_out)
+         );
+
     reg [TLBNUM_WIDTH-1:0] random_random;
     wire [31:0] random = {{(32-TLBNUM_WIDTH){1'b0}}, random_random};
     always @(posedge clk) begin
@@ -419,7 +429,7 @@ module cp0 #
                 if (random_random == {TLBNUM_WIDTH{1'b1}})
                     random_random <= wired_wired;
                 else
-                    random_random <= random_random + 1;
+                    random_random <= random_random + {3'b0, lfsr_out[1]};
             end
         end
     end

@@ -227,13 +227,14 @@ module cache #
         end
     end
     reg [NUM_WAY-1:0] wb_ways;
+    wire [NUM_WAY-1:0] wb_ways_init = (req_buf_cacheop_hit ? hit_way : v_ways) & dirty_ways;
     wire [NUM_WAY-1:0] wb_way;
     wire [NUM_WAY-1:0] wb_ways_next = wb_ways & ~wb_way;
     wire wb_last_way = wb_ways_next == 0;
     wire replace_to_dirty_miss;
     always @(posedge clk) begin
         if (state == LOOKUP)
-            wb_ways <= (req_buf_cacheop_hit ? hit_way : v_ways) & dirty_ways;
+            wb_ways <= wb_ways_init;
         else begin
             if (replace_to_dirty_miss)
                 wb_ways <= wb_ways_next;
@@ -308,7 +309,7 @@ module cache #
     wire lookup_to_idle   = (state == LOOKUP) & (~lookup_to_lookup & _hit);
     wire lookup_to_refill = (state == LOOKUP) &
          (
-             req_buf_cacheop & ~req_buf_cacheop_wb &
+             req_buf_cacheop & (~req_buf_cacheop_wb | ~|wb_ways_init) &
              (
                  (req_buf_cacheop_hit & hit)
                  | req_buf_cacheop_index
@@ -317,7 +318,7 @@ module cache #
     wire lookup_to_miss       = (state == LOOKUP) &
          (~_hit & ~req_buf_cacheop & (req_buf_uncached ? ~req_buf_write : ~dirty));
     wire lookup_to_dirty_miss = (state == LOOKUP) &
-         (~_hit & (req_buf_cacheop ? req_buf_cacheop_wb : (req_buf_uncached ? req_buf_write : dirty)));
+         (~_hit & (req_buf_cacheop ? (req_buf_cacheop_wb & |wb_ways_init) : (req_buf_uncached ? req_buf_write : dirty)));
     // MISS to ...
     wire miss_to_miss   = (state == MISS) & ~rd_rdy;
     wire miss_to_refill = (state == MISS) & rd_rdy;

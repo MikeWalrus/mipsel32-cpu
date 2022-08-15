@@ -109,7 +109,9 @@ module mycpu_top #
                  .D_NUM_WAY(D_NUM_WAY),
                  .D_BYTES_PER_LINE(D_BYTES_PER_LINE),
                  .D_NUM_LINE(D_NUM_LINE),
-                 .START_PC(32'h802cf038)
+                 .START_PC(32'h802cf038),
+                 .TLB(1),
+                 .TLBNUM(2)
              )
              cpu_sram
              (
