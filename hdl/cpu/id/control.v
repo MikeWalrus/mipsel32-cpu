@@ -328,8 +328,9 @@ module control(
 
     // exception
     assign exc_syscall = is_R_type & func_syscall;
-    assign exc_cp_unusable = floating_point | is_ll | is_sc;
-    assign exc_reserved = ~|{
+    wire _exc_cp_unusable = floating_point | is_ll | is_sc;
+    assign exc_cp_unusable = 0;
+    assign exc_reserved = _exc_cp_unusable | ~|{
                is_R_type,
                is_branch,
                is_addi,

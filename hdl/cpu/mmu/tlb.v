@@ -2,6 +2,7 @@ module tlb #(
         parameter TLBNUM = 16
     ) (
         input clk,
+        input reset,
 
         // search port 0
         input  [18:0]               s0_vpn2,
@@ -156,7 +157,24 @@ module tlb #(
 
 
     // write
+    integer j;
     always @(posedge clk) begin
+        if (reset) begin
+            for ( j = 0; j < TLBNUM; j = j + 1) begin
+                tlb_vpn2[j] <= {19{1'b1}};
+                tlb_asid[j] <= 8'b0;
+                tlb_g[j]    <= 0;
+                tlb_pfn0[j] <= 20'b0;
+                tlb_c0[j]   <= 3'b0;
+                tlb_d0[j]   <= 0;
+                tlb_v0[j]   <= 0;
+                tlb_pfn1[j] <= 20'b0;
+                tlb_c1[j]   <= 3'b0;
+                tlb_d1[j]   <= 0;
+                tlb_v1[j]   <= 0;
+            end
+
+        end
         if (we) begin
             tlb_vpn2[w_index] <= w_vpn2;
             tlb_asid[w_index] <= w_asid;
@@ -173,3 +191,4 @@ module tlb #(
     end
 
 endmodule
+

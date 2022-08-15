@@ -86,7 +86,7 @@ module cp0 #
     wire eret = exception_like & exccode == `ERET;
     wire refetch = exception_like & exccode == `REFETCH;
     wire exception = exception_like & ~eret & ~refetch;
-    wire exc_tlb_refill = exception & tlb_refill;
+    wire exc_tlb_refill = exception & |{exccode == `EXC_TLBL, exccode == `EXC_TLBS, exccode == `EXC_MOD} & tlb_refill;
     wire exc_int = exception & exccode == `EXC_Int;
     wire exc = exception & ~exc_tlb_refill & ~exc_int;
 
