@@ -360,7 +360,7 @@ module sram_to_axi #
             .strb   (d_cache_wr_strb),
 
             // ar r
-            .read_unfinish(|{i_arvalid_reg, d_arvalid_reg, waiting_for_rvalid}),
+            .read_unfinish(0),//|{i_arvalid_reg, d_arvalid_reg, waiting_for_rvalid}),
 
             // aw
             .awid   (awid),
