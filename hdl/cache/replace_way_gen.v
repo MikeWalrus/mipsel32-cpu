@@ -32,7 +32,7 @@ module replace_way_gen # (parameter NUM_WAY = 2)
              .out(lfsr_out)
          );
     if (NUM_WAY == 1) begin
-        assign random_replace_way = 0;
+        assign random_replace_way = 1;
     end else begin
         bin_to_1h #(.OUTPUT_WIDTH(NUM_WAY)) replace_way_bin_to_1h(
                       .binary(lfsr_out[$clog2(NUM_WAY)-1:0]),

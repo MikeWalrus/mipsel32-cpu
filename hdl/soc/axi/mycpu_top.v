@@ -55,6 +55,7 @@ module mycpu_top #
         input bvalid,
         output bready,
 
+        //debug signals
         output [31:0] debug_wb_pc,
         output [3 :0] debug_wb_rf_wen,
         output [4 :0] debug_wb_rf_wnum,
@@ -100,7 +101,6 @@ module mycpu_top #
     wire cpu_data_cacheop_ok1;
     wire cpu_data_cacheop_ok2;
 
-    //debug signals
 
     cpu_sram # (
                  .I_NUM_WAY(I_NUM_WAY),
@@ -108,7 +108,9 @@ module mycpu_top #
                  .I_NUM_LINE(I_NUM_LINE),
                  .D_NUM_WAY(D_NUM_WAY),
                  .D_BYTES_PER_LINE(D_BYTES_PER_LINE),
-                 .D_NUM_LINE(D_NUM_LINE)
+                 .D_NUM_LINE(D_NUM_LINE),
+                 .TLB(1),
+                 .TLBNUM(4)
              )
              cpu_sram
              (

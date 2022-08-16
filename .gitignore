@@ -5,6 +5,7 @@ golden_trace*
 *.vcd
 *.lx2
 *.fst
+*.hier
 
 cpu_axi_sim
 cpu_sram_sim
