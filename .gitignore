@@ -16,3 +16,5 @@ lfsr_test
 
 obj_dir
 compile_commands.json
+
+.DS_Store

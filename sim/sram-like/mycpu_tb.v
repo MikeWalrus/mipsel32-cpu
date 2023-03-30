@@ -213,8 +213,8 @@ module tb_top(
     //monitor test
     initial begin
         $timeformat(-9,0," ns",10);
-        while(!resetn)
-            #5;
+        /* while(!resetn) */
+            /* #5; */
         $display("==============================================================");
         $display("Test begin!");
 
